@@ -6,6 +6,9 @@ window.checkVariables = ['botUrl', 'bot.isBotRunning', 'bot.scores'];
 const {ipcRenderer} = require('electron');
 const {dialog} = require('electron').remote;
 
+var n = 4;
+var headless = true;
+
 $('#select-file').click(function () {
     var path = dialog.showOpenDialog({
         properties: ['openFile'], 
@@ -16,11 +19,11 @@ $('#select-file').click(function () {
     })[0];
     // That nasty escape character :/
     var path = path.replace(/\\/g,'/');
-    submitCode('file://' + path);
+    submitCode('file://' + path, n, headless);
 })
 
 $('#submit-code').click(function() {
-    submitCode($('#code-url').val());
+    submitCode($('#code-url').val(), n, headless);
 })
 
 ipcRenderer.on('replyAllStats', (event, args) => {
@@ -43,15 +46,25 @@ $('#add-variable').click(function() {
     window.checkVariables.push($('#add-variable-text').val());
     updateTableHead();
 })
+$('#set-num').click(function() {
+    this.n = document.getElementById("set-variable-num").val();
+    ipcRenderer.send('debug', n);
+})
+$('#set-headless').click(function() {
+    this.headless = document.getElementById("headless").val();
+})
 
-function submitCode(codeUrl) {
+// Configure number of bots to run per gen / whether or not headless here
+function submitCode(codeUrl, n, headless) {
     args = {
-        codeUrl: codeUrl
+        codeUrl: codeUrl,
+        n: n,
+        headless: headless
     };
     // Create a new bot window in main.js
     ipcRenderer.send('submit-code', args);
 }
-
+ 
 function updateTableHead() {
     $('#table-bots thead th').remove();
     for (var i = 0; i < window.checkVariables.length; i++) {

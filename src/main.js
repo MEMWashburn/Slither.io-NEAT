@@ -42,9 +42,9 @@ function insertScriptToWindow (targetWindow, url) {
   targetWindow.webContents.executeJavaScript(greasemonkey + script)
 }
 
-function createBotWindow (codeUrl) {
+function createBotWindow (codeUrl, headless) {
   // Create the browser window.
-  var botWindow = new BrowserWindow({width: 800, height: 600, webPreferences: {webSecurity : false}})
+  var botWindow = new BrowserWindow({width: 800, height: 600, show: !headless, webPreferences: {webSecurity : false}})
 
   // and load slither.io of the app.
   botWindow.loadURL('http://slither.io/')
@@ -105,7 +105,7 @@ ipcMain.on('getAllStats', (event, args) => {
   //console.log(args)
 
   ipcMain.on('replyStats', (event, arg) => {
-    console.log(arg)
+    //console.log(arg)
     allReplies.push(arg)
     if (allReplies.length === allBots.length) {
       ipcMain.removeAllListeners(['replyStats'])
@@ -126,6 +126,15 @@ ipcMain.on('getAllStats', (event, args) => {
   })
 })
 
+// Run n bots, if headless is true won't show window
 ipcMain.on('submit-code', (event, args) => {
-  newBotWindow = createBotWindow(args.codeUrl)
+  for (var i = 0; i < args.n; i++) {
+    newBotWindow = createBotWindow(args.codeUrl, args.headless)
+    //console.log(args.n)
+  }
+})
+
+// Debug
+ipcMain.on('debug', (event, n) => {
+  console.log(n)
 })
