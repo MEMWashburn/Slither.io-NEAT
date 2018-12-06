@@ -7,6 +7,7 @@ const {ipcRenderer} = require('electron');
 const {dialog} = require('electron').remote;
 
 var n = 4;
+document.getElementById('set-variable-num').value = "" + n;
 var headless = true;
 
 $('#select-file').click(function () {
@@ -47,7 +48,7 @@ $('#add-variable').click(function() {
     updateTableHead();
 })
 $('#set-num').click(function() {
-    this.n = document.getElementById("set-variable-num").val();
+    this.n = document.getElementById("set-variable-num").valueAsNumber;
     ipcRenderer.send('debug', n);
 })
 $('#set-headless').click(function() {
