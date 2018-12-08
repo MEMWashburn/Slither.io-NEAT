@@ -9,6 +9,8 @@ const {dialog} = require('electron').remote;
 var n = 4;
 document.getElementById('set-variable-num').value = "" + n;
 var headless = true;
+document.getElementById('headless').checked = headless;
+var path = '';
 
 $('#select-file').click(function () {
     var path = dialog.showOpenDialog({
@@ -19,12 +21,16 @@ $('#select-file').click(function () {
         ]
     })[0];
     // That nasty escape character :/
-    var path = path.replace(/\\/g,'/');
-    submitCode('file://' + path, n, headless);
+    path = path.replace(/\\/g,'/');
+    submitCode('file://' + path, 
+        document.getElementById("set-variable-num").valueAsNumber,
+        document.getElementById("headless").checked);
 })
 
 $('#submit-code').click(function() {
-    submitCode($('#code-url').val(), n, headless);
+    submitCode('file://' + path, 
+        document.getElementById("set-variable-num").valueAsNumber,
+        document.getElementById("headless").checked);
 })
 
 ipcRenderer.on('replyAllStats', (event, args) => {
@@ -46,13 +52,6 @@ $('#update-stats').click(function() {
 $('#add-variable').click(function() {
     window.checkVariables.push($('#add-variable-text').val());
     updateTableHead();
-})
-$('#set-num').click(function() {
-    this.n = document.getElementById("set-variable-num").valueAsNumber;
-    ipcRenderer.send('debug', n);
-})
-$('#set-headless').click(function() {
-    this.headless = document.getElementById("headless").val();
 })
 
 // Configure number of bots to run per gen / whether or not headless here

@@ -102,9 +102,10 @@ ipcMain.on('getAllStats', (event, args) => {
   var allStats = new Array()
   var allReplies = new Array()
   var originalEvent = event
+  console.log("Num bots: " + allBots.length)
 
   ipcMain.on('replyStats', (event, arg) => {
-    console.log(arg)
+    // console.log(arg)
     // if (arg['bot.isRunning'] == false) {
     //   console.log("Bot no longer running, time here")
     // }
