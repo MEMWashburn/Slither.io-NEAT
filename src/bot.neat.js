@@ -355,6 +355,7 @@ var bot = window.bot = (function() {
         lookForFood: false,
         collisionPoints: [],
         collisionAngles: [],
+        brain: undefined, 
         scores: [],
         rank: 500,
         ranks: [],
