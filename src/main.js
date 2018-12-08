@@ -21,8 +21,8 @@ Config.warnings = false;
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
-
 allBots = new Array()
+neatBots = new Array()
 
 function createWindow () {
   // Create the browser window.
@@ -41,6 +41,9 @@ function createWindow () {
     // when you should delete the corresponding element.
     while (allBots[0] !== undefined) {
       allBots[0].close();
+    }
+    while (neatBots[0] !== undefined) {
+      neatBots[0].close();
     }
     mainWindow = null;
   })
@@ -74,7 +77,7 @@ function createBotWindow (codeUrl, headless) {
     var dirname = __dirname.replace(/\\/g,'/')
 
     // Insert 'passStats.js', to communicate for the stats
-    insertScriptToWindow(botWindow, `file://${dirname}/neatComs.js`)
+    insertScriptToWindow(botWindow, `file://${dirname}/passStats.js`)
 
     botWindow.webContents.executeJavaScript(`window.botUrl = '${codeUrl}'`)
     botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
@@ -88,6 +91,41 @@ function createBotWindow (codeUrl, headless) {
     var index = allBots.indexOf(botWindow)
     if (index > -1) {
       allBots.splice(index, 1)
+    }
+  })
+}
+
+function createNEATBotWindow (codeUrl, headless) {
+  // Create the browser window.
+  var botWindow = new BrowserWindow({width: 800, height: 600, show: !headless, webPreferences: {webSecurity : false}})
+
+  // and load slither.io of the app.
+  botWindow.loadURL('http://slither.io/')
+
+  // If loading is completed
+  botWindow.webContents.on('did-finish-load', function() {
+
+    // Insert the latest bot script
+    insertScriptToWindow(botWindow, codeUrl)
+
+    // Get the dirname as a url
+    var dirname = __dirname.replace(/\\/g,'/')
+
+    // Insert 'passStats.js', to communicate for the stats
+    insertScriptToWindow(botWindow, `file://${dirname}/neatComs.js`)
+
+    botWindow.webContents.executeJavaScript(`window.botUrl = '${codeUrl}'`)
+    botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
+  });
+
+  // Add the bot to the list with bots
+  neatBots.push(botWindow)
+
+  botWindow.on('closed', function () {
+    // If the window is closed, remove it from the allBots array
+    var index = neatBots.indexOf(botWindow)
+    if (index > -1) {
+      neatBots.splice(index, 1)
     }
   })
 }
@@ -118,14 +156,9 @@ ipcMain.on('getAllStats', (event, args) => {
   var allStats = new Array()
   var allReplies = new Array()
   var originalEvent = event
-  console.log("Num bots: " + allBots.length)
+  //console.log("Num bots: " + allBots.length)
 
   ipcMain.on('replyStats', (event, arg) => {
-    // console.log(arg)
-    // if (arg['bot.isRunning'] == false) {
-    //   console.log("Bot no longer running, time here")
-    // }
-
     allReplies.push(arg)
     if (allReplies.length === allBots.length) {
       ipcMain.removeAllListeners(['replyStats'])
@@ -150,11 +183,86 @@ ipcMain.on('getAllStats', (event, args) => {
 ipcMain.on('submit-code', (event, args) => {
   for (var i = 0; i < args.n; i++) {
     newBotWindow = createBotWindow(args.codeUrl, args.headless)
-    //console.log(args.n)
   }
 })
 
-// Debug
-ipcMain.on('debug', (event, n) => {
-  console.log(n)
-})
+///////////////////////////////////////////////////////////////////////////////
+//////////////////// N E A T  S L I T H E R  I O //////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+// SETTINGS //
+var PARALLEL_BOTS = 10;
+var GAMES_PER_BOT = 5;
+
+// GA settings
+var POP_SIZE         = 50;
+var GENERATIONS      = 10;
+var MUTATION_RATE    = 0.3;
+var ELITISM          = Math.round(0.1 * POP_SIZE);
+
+neatControls = {
+  running: false,
+  paused: false,
+  stop: false,
+  genDone: false
+}
+
+neat = undefined
+
+function initNeat () {
+  return new Neat(
+    1, // inputs
+    1, // outputs
+    null, // evaluation handled externally
+    { // Options
+      mutation: [
+        Methods.Mutation.ADD_NODE,
+        Methods.Mutation.SUB_NODE,
+        Methods.Mutation.ADD_CONN,
+        Methods.Mutation.SUB_CONN,
+        Methods.Mutation.MOD_WEIGHT,
+        Methods.Mutation.MOD_BIAS,
+        Methods.Mutation.MOD_ACTIVATION,
+        Methods.Mutation.ADD_GATE,
+        Methods.Mutation.SUB_GATE,
+        Methods.Mutation.ADD_SELF_CONN,
+        Methods.Mutation.SUB_SELF_CONN,
+        Methods.Mutation.ADD_BACK_CONN,
+        Methods.Mutation.SUB_BACK_CONN
+      ],
+      popsize: POP_SIZE,
+      mutationRate: MUTATION_RATE,
+      elitism: ELITISM
+    }
+  )
+};
+
+function runNeat() {
+  if (neatControls.paused) {
+    setTimeout(runNeat, 100);
+    return;
+  }
+
+  if (neatControls.stop) {
+    neat = undefined;
+    neatControls.stop = false;
+    neatControls.paused = false;
+    neatControls.running = false;
+    neatControls.genDone = false;
+    return;
+  }
+
+  neatControls.running = true;
+  if (neat === undefined) {
+    neat = initNeat();
+  }
+
+  if (neatControls.genDone) {
+
+  }
+  else {
+    
+  }
+
+  setTimeout(runNeat, 250);
+}
