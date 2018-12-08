@@ -24,6 +24,7 @@
   "homepage": "https://github.com/K00sKlust/slither.io-bot-manager#readme",
   "devDependencies": {
     "electron": "^3.0.10",
-    "electron-prebuilt": "^1.0.1"
+    "electron-prebuilt": "^1.0.1",
+    "neataptic": "^1.4.7"
   }
 }

@@ -1,10 +1,8 @@
 const {ipcRenderer} = require('electron');
-//const neat = require('neataptic');
+//const neataptic = require('neataptic');
 
 // pass the stats if asked for (asynchronous)
 // https://github.com/electron/electron/blob/master/docs/api/ipc-main.md#sending-messages
-
-play_btn.btnf.click();
 
 ipcRenderer.on('getStats', (event, args) => {
 	result = []

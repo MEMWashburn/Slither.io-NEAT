@@ -6,6 +6,18 @@ const BrowserWindow = electron.BrowserWindow
 
 const {ipcMain} = require('electron')
 
+/** Neataptic **/
+const neataptic = require('neataptic');
+
+/** Rename vars */
+var Neat    = neataptic.Neat;
+var Methods = neataptic.Methods;
+var Config  = neataptic.config;
+var Architect = neataptic.Architect;
+
+/** Turn off warnings */
+Config.warnings = false;
+
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
@@ -27,15 +39,18 @@ function createWindow () {
     // Dereference the window object, usually you would store windows
     // in an array if your app supports multi windows, this is the time
     // when you should delete the corresponding element.
-    mainWindow = null
+    while (allBots[0] !== undefined) {
+      allBots[0].close();
+    }
+    mainWindow = null;
   })
 }
 
 function insertScriptToWindow (targetWindow, url) {
   var greasemonkey = `GM_info = {'script': {'version': 'test version'}};`;
   var script =  `
-    var scr = document.createElement("script"); 
-    scr.type="text/javascript"; 
+    var scr = document.createElement("script");
+    scr.type="text/javascript";
     scr.src="${url}";
     document.getElementsByTagName("head")[0].appendChild(scr);
   `
@@ -59,9 +74,10 @@ function createBotWindow (codeUrl, headless) {
     var dirname = __dirname.replace(/\\/g,'/')
 
     // Insert 'passStats.js', to communicate for the stats
-    insertScriptToWindow(botWindow, `file://${dirname}/passStats.js`)
+    insertScriptToWindow(botWindow, `file://${dirname}/neatComs.js`)
 
     botWindow.webContents.executeJavaScript(`window.botUrl = '${codeUrl}'`)
+    botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
   });
 
   // Add the bot to the list with bots
@@ -121,7 +137,7 @@ ipcMain.on('getAllStats', (event, args) => {
       allStats = allReplies.map(function (object) {
         return object.stats
       })
-      
+
       originalEvent.sender.send('replyAllStats', allStats)
     }
   })

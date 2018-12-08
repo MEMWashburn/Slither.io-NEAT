@@ -351,17 +351,20 @@ var canvasUtil = window.canvasUtil = (function() {
 var bot = window.bot = (function() {
     return {
         isBotRunning: false,
+        isEvalDone: false,
         isBotEnabled: true,
         lookForFood: false,
         collisionPoints: [],
         collisionAngles: [],
-        brain: undefined, 
+        popID: -1,
+        gen: -1,
+        gamesleft: 1,
+        brain: undefined,
         scores: [],
-        rank: 500,
         ranks: [],
-        fps: [],
-        oneSec: 0,
-        oefsPerSec: 0,
+        fpss: [],
+        lifetimes: [],
+        rank: 500,
         foodTimeout: undefined,
         sectorBoxSide: 0,
         defaultAccel: 0,
@@ -740,6 +743,59 @@ var bot = window.bot = (function() {
                 f.distance / (Math.ceil(f.da / bot.opt.foodRoundAngle) * bot.opt.foodRoundAngle);
         },
 
+        neatComputeFoodClusters: function() {
+            window.foodClusters = [];
+            var foodGetIndex = [];
+            var fi = 0;
+            var sw = bot.snakeWidth;
+
+            for (var i = 0; i < window.foods.length && window.foods[i] !== null; i++) {
+                var a;
+                var da;
+                var distance;
+                var sang = window.snake.ehang;
+                var f = window.foods[i];
+
+                if (!f.eaten &&
+                    !(
+                        canvasUtil.circleIntersect(
+                            canvasUtil.circle(f.xx, f.yy, 2),
+                            bot.sidecircle_l) ||
+                        canvasUtil.circleIntersect(
+                            canvasUtil.circle(f.xx, f.yy, 2),
+                            bot.sidecircle_r))) {
+
+                    var cx = Math.round(Math.round(f.xx / sw) * sw);
+                    var cy = Math.round(Math.round(f.yy / sw) * sw);
+                    var csz = Math.round(f.sz);
+
+                    if (foodGetIndex[cx + '|' + cy] === undefined) {
+                        foodGetIndex[cx + '|' + cy] = fi;
+                        a = canvasUtil.fastAtan2(cy - window.snake.yy, cx - window.snake.xx);
+                        da = Math.min(
+                            (2 * Math.PI) - Math.abs(a - sang), Math.abs(a - sang));
+                        distance = Math.round(
+                            canvasUtil.getDistance2(cx, cy, window.snake.xx, window.snake.yy));
+                        foodClusters[fi] = {
+                            x: cx,
+                            y: cy,
+                            a: a,
+                            da: da,
+                            sz: csz,
+                            distance: distance,
+                            score: 0.0
+                        };
+                        fi++;
+                    } else {
+                        foodClusters[foodGetIndex[cx + '|' + cy]].sz += csz;
+                    }
+                }
+            }
+
+            foodClusters.forEach(bot.scoreFood);
+            foodClusters.sort(bot.sortScore);
+          },
+
         computeFoodGoal: function() {
             var foodClusters = [];
             var foodGetIndex = [];
@@ -889,6 +945,72 @@ var bot = window.bot = (function() {
                         bot.foodTimer, 1000 / bot.opt.targetFps * bot.opt.foodFrames);
                 }
                 window.setAcceleration(bot.foodAccel());
+            }
+        },
+
+        // Neat bot
+        neatgo: function() {
+            bot.every();
+            // Snake collisions
+            bot.getCollisionPoints();
+
+            // Food detection
+            if (bot.foodTimeout === undefined) {
+                bot.foodTimeout = window.setTimeout(
+                    function() {
+                      bot.neatComputeFoodClusters();
+                      bot.foodTimeout = undefined;
+                    }, 1000 / bot.opt.targetFps * bot.opt.foodFrames);
+            }
+
+            var input = [];
+            var maxDistance = (2 * window.grd);
+            input.push(window.snake.xx / maxDistance);
+            input.push(window.snake.yy / maxDistance);
+            input.push(window.snake.sc); // NOT NORMALIZED ??
+
+
+            var arcs = (2 * Math.PI) / bot.opt.arcSize;
+            var maxDistance2 = maxDistance * maxDistance;
+            for (var i = 0; i < arcs; i++) {
+              if (bot.collisionAngles[i] === undefined) {
+                input.push(1);
+              }
+              else {
+                input.push(bot.collisionAngles[i].distance / maxDistance2)
+              }
+            }
+            var numOfBestFood = 10;
+            for (var i = 0; i < numOfBestFood; i ++) {
+              if (window.foodClusters === undefined || window.foodClusters[i] === undefined) {
+                input.push(0);
+                input.push(0);
+                input.push(0);
+              }
+              else {
+                input.push(window.foodClusters[i].score);
+                input.push(window.foodClusters[i].x / maxDistance);
+                input.push(window.foodClusters[i].y / maxDistance);
+              }
+            }
+
+            //window.myInputs = input;
+            // INPUT SIZE: 49
+            //   3 (snake x, snake y, snake size)
+            //  16 (snake detect arcs (PI/8) ; distance to our snake)
+            //  10 (best foods) * 3 (food score, food x, food y)
+            if (bot.brain && bot.brain.activate) {
+
+              var out = bot.brain.activate(input);
+              // Set new input to slither.io snake
+              // Scale x and y output
+              const RES = 300;
+              var dir = {
+                x: (Math.floor(out[1] * 2 * RES - RES)),
+                y: (Math.floor(out[2] * 2 * RES - RES))
+              };
+              canvasUtil.setMouseCoordinates(dir);
+              window.setAcceleration(Math.round(out[0]));
             }
         },
 
@@ -1326,51 +1448,65 @@ var userInterface = window.userInterface = (function() {
 
         oefTimer: function() {
             var start = Date.now();
-            var headless = true;
 
             // Original slither.io oef function + whatever is under it
             original_oef();
-            // Modified slither.io redraw function
-            if (headless){
-              if (Date.now() - bot.oneSec > 1000) {
-                bot.oneSec = Date.now();
-                userInterface.framesPerSecond.fps = bot.oefsPerSec;
+
+            // Don't draw anything if in headless mode, increases performance
+            if (window.headless){
+              if (start - window.oneSec > 1000) {
+                window.oneSec = start;
+                userInterface.framesPerSecond.fps = window.oefsPerSec;
                 if (userInterface.framesPerSecond.fpss.length >= 100) {
                   userInterface.framesPerSecond.fpss.shift();
                 }
                 userInterface.framesPerSecond.fpss.push(userInterface.framesPerSecond.fps)
-                bot.oefsPerSec = 0;
+                window.oefsPerSec = 0;
               }
               else {
-                bot.oefsPerSec++;
+                window.oefsPerSec++;
               }
             }
             else {
+              // Modified slither.io redraw function
               new_redraw();
             }
 
             if (window.playing && bot.isBotEnabled && window.snake !== null) {
                 window.onmousemove = function() {};
                 bot.isBotRunning = true;
-                //bot.go();
+                bot.neatgo();
                 if (window.rank) {
                   bot.rank = window.rank;
                 }
+                if (window.botStart == 0) {
+                  window.botStart = start;
+                }
             } else if (bot.isBotEnabled && bot.isBotRunning) {
                 bot.isBotRunning = false;
+                bot.gamesleft--;
                 if (window.lastscore && window.lastscore.childNodes[1]) {
                     bot.scores.push(parseInt(window.lastscore.childNodes[1].innerHTML));
                     //bot.scores.sort(function(a, b) {
                     //    return b - a;
                     //});
-                    userInterface.updateStats();
-                    bot.ranks.push(bot.rank);
+                    if (!window.headless) { userInterface.updateStats();}
                 }
-                bot.fps.push(Math.round(userInterface.framesPerSecond.fpss.reduce(function(a, b) { return a + b; }) / (userInterface.framesPerSecond.fpss.length)));
+
+                bot.ranks.push(bot.rank);
+                bot.rank = 500;
+
+                bot.fpss.push(Math.round(userInterface.framesPerSecond.fpss.reduce(function(a, b) { return a + b; }) / (userInterface.framesPerSecond.fpss.length)));
                 userInterface.framesPerSecond.fpss = [];
 
-                if (true) {
+                bot.lifetimes.push(Math.floor((Date.now() - window.botStart)  / 1000));
+                window.botStart = 0;
+
+                if (bot.gamesleft) {
                     window.connect();
+                }
+                else {
+                  bot.isEvalDone = true;
                 }
             }
 
@@ -1378,7 +1514,7 @@ var userInterface = window.userInterface = (function() {
                 window.onmousemove = original_onmousemove;
             }
 
-            if (!headless) { userInterface.onFrameUpdate();}
+            if (!window.headless) { userInterface.onFrameUpdate();}
             setTimeout(userInterface.oefTimer, (1000 / bot.opt.targetFps) - (Date.now() - start));
         },
 
@@ -1412,6 +1548,15 @@ var userInterface = window.userInterface = (function() {
         }
     };
 })();
+
+var waitForBrain = function () {
+  if (bot.brain == undefined) {
+    setTimeout(waitForBrain, 200);1
+  }
+  else { // Start games
+    play_btn.btnf.click();
+  }
+};
 
 // Main
 (function() {
@@ -1490,8 +1635,18 @@ var userInterface = window.userInterface = (function() {
     window.social.remove();
 
     // Maintain fps
-    setInterval(userInterface.framesPerSecond.fpsTimer, 80);
+    if (window.headless) {
+      window.oneSec = 0;
+      window.oefsPerSec = 0;
+    }
+    else {
+      setInterval(userInterface.framesPerSecond.fpsTimer, 80);
+    }
+
+    window.botStart = 0;
 
     // Start!
     userInterface.oefTimer();
+    waitForBrain();
+
 })();
