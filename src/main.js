@@ -220,6 +220,7 @@ neatControls = {
 }
 
 neat = undefined
+ipcResend = 0;
 NEAT_BOT_STATS = ['bot.isEvalDone', 'bot.popID', 'bot.gen', 'bot.scores', 'bot.lifetimes', 'bot.ranks', 'bot.fpss', 'bot.gamesleft'];
 function createLabeledStats(stats) {
   return {
@@ -248,6 +249,38 @@ function initNeat () {
   )
 };
 
+function requestStats() {
+  //console.log("requestStats: requesting stats")
+  // New stats request
+  neat.state.stats = new Array()
+  neat.state.replies = new Array()
+  neat.state.statsRecieved = false;
+  ipcResend = 0;
+
+  ipcMain.on('replyNeatStats', (event, arg) => {
+    if (neat.state.replies.every(reply => reply.index != arg.index)) {
+      neat.state.replies.push(arg)
+    }
+    if (neat.state.replies.length === neatBots.length) {
+      //console.log("requestStats: all bot stats recieved")
+      ipcMain.removeAllListeners(['replyNeatStats'])
+
+      neat.state.replies = neat.state.replies.sort(function (a, b) {
+        return a.index - b.index
+      })
+
+      neat.state.stats = neat.state.replies.map(function (object) {
+        return object.stats
+      })
+      neat.state.statsRecieved = true;
+    }
+  })
+
+  neatBots.forEach(function (item, index, array) {
+    item.webContents.send('getNeatStats', {'index': index, 'stats': NEAT_BOT_STATS})
+  })
+};
+
 function runNeat() {
   if (neatControls.paused) {
     setTimeout(runNeat, 1000);
@@ -265,7 +298,7 @@ function runNeat() {
   }
 
   neatControls.running = true;
-  ipcResend = 0;
+
   if (neat === undefined) {
     neat = initNeat();
     neat.state = {
@@ -303,7 +336,7 @@ function runNeat() {
       popSave[p].lifetimes = genome.lifetimes;
       popSave[p].fpss = genome.fpss;
     }
-    console.log("Generation " + neat.generation + " Best Score: " + bestScore);
+    console.log("NEAT::\tGen " + neat.generation + "\tBest Score: " + bestScore);
 
     fs.writeFile("pop" + neat.generation, JSON.stringify(popSave), function (err) {
       if (err) {
@@ -346,6 +379,7 @@ function runNeat() {
   }
   // evaluation / simulation of slither.io bot
   else if (neat.state.statsRecieved){
+    //console.log("stats got ");
     // Check on bots
     var botsDone = [];
     for (var s in neat.state.stats) {
@@ -381,44 +415,17 @@ function runNeat() {
     neat.state.genDone = neat.state.genomesEvaled == POP_SIZE;
 
     if (!neat.state.genDone) {
-      // New stats request
-      neat.state.stats = new Array()
-      neat.state.replies = new Array()
-      neat.state.statsRevieved = false;
-      ipcResend = 0;
-
-      ipcMain.on('replyNeatStats', (event, arg) => {
-        if (neat.state.replies.every(reply => reply.index != arg.index)) {
-          neat.state.replies.push(arg)
-        }
-        if (neat.state.replies.length === neatBots.length) {
-          ipcMain.removeAllListeners(['replyNeatStats'])
-
-          neat.state.replies = neat.state.replies.sort(function (a, b) {
-            return a.index - b.index
-          })
-
-          neat.state.stats = neat.state.replies.map(function (object) {
-            return object.stats
-          })
-          neat.state.statsRecieved = true;
-        }
-      })
-
-      neatBots.forEach(function (item, index, array) {
-        item.webContents.send('getNeatStats', {'index': index, 'stats': NEAT_BOT_STATS})
-      })
+      requestStats();
     }
   }
   else {
     if (ipcResend++ == 10) {
-      neatBots.forEach(function (item, index, array) {
-        if (false && neat.state.replies.every(reply => reply.index != index))
-          item.webContents.send('getNeatStats', {'index': index, 'stats': NEAT_BOT_STATS})
-      })
+      ipcMain.removeAllListeners(['replyNeatStats'])
+      requestStats();
       ipcResend = 0;
     }
   }
-  console.log("Gen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE);
+
+  console.log("NEAT::\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE);
   setTimeout(runNeat, 1000);
 }
