@@ -125,6 +125,7 @@ function createNEATBotWindow (codeUrl, headless, info) {
     botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
 
     setTimeout(function () {botWindow.webContents.send('send-info', info);}, 250);
+    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 2500);
   });
 
   // Add the bot to the list with bots
@@ -206,7 +207,7 @@ ipcMain.on('submit-code', (event, args) => {
 var BOT_PATH = `file://${__dirname}/bot.neat.js`;
 var PARALLEL_BOTS = 10;
 var GAMES_PER_BOT = 2;
-var HEADLESS = false;
+var HEADLESS = true;
 
 // GA settings
 var POP_SIZE         = 20;
@@ -221,7 +222,9 @@ function fitness(genome) {
 neatControls = {
   running: false,
   paused: false,
-  stop: false
+  stop: false, 
+  continue: true,
+  gen: 4
 }
 
 neat = undefined
@@ -316,6 +319,20 @@ function runNeat() {
       genomesRun: 0,
       time: 0
     }
+
+    if (neatControls.continue) {
+      neatControls.paused = true;
+      neat.generation = neatControls.gen;
+      fs.readFile("pop" + neatControls.gen, 'utf8', (err, data) => {
+        if (err) throw err;
+
+        var d = JSON.parse(data);
+        neat.import(d.pop);        
+
+        neatControls.paused = false;
+      })
+    }
+
     // Make our own initial neural nets
     if (false) {
       neat.population = [];
@@ -331,18 +348,23 @@ function runNeat() {
   // Fitness scoring, elitism, crossover, and mutation
   if (neat.state.genDone) {
     var bestScore = 0;
-    var popSave = neat.export();
+    var popSave = {
+      generation: neat.generation,
+      elitism: neat.elitism,
+      mutation: neat.mutationRate,
+      pop: neat.export()
+    }
     for (var p in neat.population) {
       genome = neat.population[p];
-      genome.score = fitness(geneome);
+      genome.score = fitness(genome);
       bestScore = Math.max (bestScore, genome.score);
-      popSave[p].score = genome.score;
-      popSave[p].scores = genome.scores;
-      popSave[p].ranks = genome.ranks;
-      popSave[p].lifetimes = genome.lifetimes;
-      popSave[p].fpss = genome.fpss;
+      popSave.pop[p].score = genome.score;
+      popSave.pop[p].scores = genome.scores;
+      popSave.pop[p].ranks = genome.ranks;
+      popSave.pop[p].lifetimes = genome.lifetimes;
+      popSave.pop[p].fpss = genome.fpss;
     }
-    console.log("NEAT::\tGen " + neat.generation + "\tBest Score: " + bestScore+ " (" + neat.state.time + "s)");
+    console.log("NEAT::\tGen: " + neat.generation + "\tBest Score: " + bestScore+ " (" + neat.state.time + "s)");
 
     fs.writeFile("pop" + neat.generation, JSON.stringify(popSave), function (err) {
       if (err) {
@@ -368,6 +390,11 @@ function runNeat() {
     // Replace old population and mutate
     neat.population = newPopulation;
     neat.mutate();
+
+    // Return elites to normal if mutated
+    for (var i = 0; i < neat.elitism; i++) {
+      neat.population[i] = newPopulation[i];
+    }
 
     // Reset
     neat.generation++;

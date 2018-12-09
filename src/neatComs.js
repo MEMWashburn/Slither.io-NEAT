@@ -15,6 +15,8 @@ ipcRenderer.on('getNeatStats', (event, args) => {
 });
 
 ipcRenderer.on('send-info', (events, args) => {
+	if (bot.brain != undefined) {return; }
+
 	if (args.popid !== undefined) { bot.popID = args.popid};
 	if (args.gen !== undefined) { bot.gen = args.gen};
 	if (args.gamesleft > 0) { bot.gamesleft = args.gamesleft};
