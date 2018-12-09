@@ -313,7 +313,8 @@ function runNeat() {
       stats: [],
       genomesEvaled: 0,
       botsRunning: 0,
-      genomesRun: 0
+      genomesRun: 0,
+      time: 0
     }
     // Make our own initial neural nets
     if (false) {
@@ -341,7 +342,7 @@ function runNeat() {
       popSave[p].lifetimes = genome.lifetimes;
       popSave[p].fpss = genome.fpss;
     }
-    console.log("NEAT::\tGen " + neat.generation + "\tBest Score: " + bestScore);
+    console.log("NEAT::\tGen " + neat.generation + "\tBest Score: " + bestScore+ " (" + neat.state.time + "s)");
 
     fs.writeFile("pop" + neat.generation, JSON.stringify(popSave), function (err) {
       if (err) {
@@ -370,6 +371,7 @@ function runNeat() {
 
     // Reset
     neat.generation++;
+    neat.state.time = 0;
     neat.state.replies = [];
     neat.state.stats = [];
     neat.state.statsRecieved = true;
@@ -405,16 +407,13 @@ function runNeat() {
     });
 
     // Evaluate a new genome if other finished until all genomes are evaled
-    var cnt = 0;
     while (neat.state.genomesRun < POP_SIZE && neat.state.botsRunning < PARALLEL_BOTS) {
-      setTimeout(function () {
-        createNEATBotWindow(BOT_PATH, HEADLESS, {
-          popid: neat.state.genomesRun,
-          gen: neat.generation,
-          gamesleft: GAMES_PER_BOT,
-          brain: neat.population[neat.state.genomesRun].toJSON()
-        });
-      }, 500 * cnt++);
+      createNEATBotWindow(BOT_PATH, HEADLESS, {
+        popid: neat.state.genomesRun,
+        gen: neat.generation,
+        gamesleft: GAMES_PER_BOT,
+        brain: neat.population[neat.state.genomesRun].toJSON()
+      });
       neat.state.genomesRun++;
       neat.state.botsRunning++;
     }
@@ -434,6 +433,7 @@ function runNeat() {
     }
   }
 
-  console.log("NEAT::\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE);
+  console.log("NEAT::\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE + " (" + neat.state.time + "s)");
+  neat.state.time++;
   setTimeout(runNeat, 1000);
 }
