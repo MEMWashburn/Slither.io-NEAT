@@ -1507,6 +1507,8 @@ var userInterface = window.userInterface = (function() {
                 else {
                   bot.isEvalDone = true;
                 }
+            } else if (!bot.isEvalDone && bot.brain != undefined) {
+              play_btn.btnf.click();
             }
 
             if (!bot.isBotEnabled || !bot.isBotRunning) {
@@ -1646,6 +1648,6 @@ var waitForBrain = function () {
 
     // Start!
     userInterface.oefTimer();
-    waitForBrain();
+    //waitForBrain();
 
 })();

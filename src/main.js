@@ -104,6 +104,11 @@ function createNEATBotWindow (codeUrl, headless, info) {
   // and load slither.io of the app.
   botWindow.loadURL('http://slither.io/')
 
+  // If loading failed
+  botWindow.webContents.on('did-fail-load', function() {
+    botWindow.loadURL('http://slither.io/')
+  });
+
   // If loading is completed
   botWindow.webContents.on('did-finish-load', function() {
 
@@ -201,7 +206,7 @@ ipcMain.on('submit-code', (event, args) => {
 var BOT_PATH = `file://${__dirname}/bot.neat.js`;
 var PARALLEL_BOTS = 10;
 var GAMES_PER_BOT = 2;
-var HEADLESS = true;
+var HEADLESS = false;
 
 // GA settings
 var POP_SIZE         = 20;
@@ -400,13 +405,16 @@ function runNeat() {
     });
 
     // Evaluate a new genome if other finished until all genomes are evaled
+    var cnt = 0;
     while (neat.state.genomesRun < POP_SIZE && neat.state.botsRunning < PARALLEL_BOTS) {
-      createNEATBotWindow(BOT_PATH, HEADLESS, {
-        popid: neat.state.genomesRun,
-        gen: neat.generation,
-        gamesleft: GAMES_PER_BOT,
-        brain: neat.population[neat.state.genomesRun].toJSON()
-      });
+      setTimeout(function () {
+        createNEATBotWindow(BOT_PATH, HEADLESS, {
+          popid: neat.state.genomesRun,
+          gen: neat.generation,
+          gamesleft: GAMES_PER_BOT,
+          brain: neat.population[neat.state.genomesRun].toJSON()
+        });
+      }, 500 * cnt++);
       neat.state.genomesRun++;
       neat.state.botsRunning++;
     }
