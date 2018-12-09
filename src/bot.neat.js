@@ -994,7 +994,7 @@ var bot = window.bot = (function() {
               }
             }
 
-            //window.myInputs = input;
+            window.myInputs = input;
             // INPUT SIZE: 49
             //   3 (snake x, snake y, snake size)
             //  16 (snake detect arcs (PI/8) ; distance to our snake)
@@ -1002,6 +1002,7 @@ var bot = window.bot = (function() {
             if (bot.brain && bot.brain.activate) {
 
               var out = bot.brain.activate(input);
+              window.myOutput = out;
               // Set new input to slither.io snake
               // Scale x and y output
               const RES = 300;
@@ -1454,6 +1455,7 @@ var userInterface = window.userInterface = (function() {
 
             // Don't draw anything if in headless mode, increases performance
             if (window.headless){
+              window.oefsPerSec++;
               if (start - window.oneSec > 1000) {
                 window.oneSec = start;
                 userInterface.framesPerSecond.fps = window.oefsPerSec;
@@ -1462,9 +1464,6 @@ var userInterface = window.userInterface = (function() {
                 }
                 userInterface.framesPerSecond.fpss.push(userInterface.framesPerSecond.fps)
                 window.oefsPerSec = 0;
-              }
-              else {
-                window.oefsPerSec++;
               }
             }
             else {

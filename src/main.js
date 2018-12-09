@@ -6,14 +6,16 @@ const BrowserWindow = electron.BrowserWindow
 
 const {ipcMain} = require('electron')
 
+const fs = require('fs');
+
 /** Neataptic **/
 const neataptic = require('neataptic');
 
 /** Rename vars */
 var Neat    = neataptic.Neat;
-var Methods = neataptic.Methods;
+var Methods = neataptic.methods;
 var Config  = neataptic.config;
-var Architect = neataptic.Architect;
+var Architect = neataptic.architect;
 
 /** Turn off warnings */
 Config.warnings = false;
@@ -95,7 +97,7 @@ function createBotWindow (codeUrl, headless) {
   })
 }
 
-function createNEATBotWindow (codeUrl, headless) {
+function createNEATBotWindow (codeUrl, headless, info) {
   // Create the browser window.
   var botWindow = new BrowserWindow({width: 800, height: 600, show: !headless, webPreferences: {webSecurity : false}})
 
@@ -116,6 +118,8 @@ function createNEATBotWindow (codeUrl, headless) {
 
     botWindow.webContents.executeJavaScript(`window.botUrl = '${codeUrl}'`)
     botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
+
+    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 250);
   });
 
   // Add the bot to the list with bots
@@ -133,7 +137,10 @@ function createNEATBotWindow (codeUrl, headless) {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow)
+app.on('ready', function () {
+  createWindow();
+  runNeat();
+})
 
 // Quit when all windows are closed.
 app.on('window-all-closed', function () {
@@ -191,45 +198,49 @@ ipcMain.on('submit-code', (event, args) => {
 ///////////////////////////////////////////////////////////////////////////////
 
 // SETTINGS //
+var BOT_PATH = `file://${__dirname}/bot.neat.js`;
 var PARALLEL_BOTS = 10;
-var GAMES_PER_BOT = 5;
+var GAMES_PER_BOT = 2;
+var HEADLESS = true;
 
 // GA settings
-var POP_SIZE         = 50;
+var POP_SIZE         = 20;
 var GENERATIONS      = 10;
 var MUTATION_RATE    = 0.3;
 var ELITISM          = Math.round(0.1 * POP_SIZE);
 
+function (genome) {
+  return Math.round(genome.scores.reduce(function(a,b) { return a + b;}) / genome.scores.length);
+}
+
 neatControls = {
   running: false,
   paused: false,
-  stop: false,
-  genDone: false
+  stop: false
 }
 
 neat = undefined
+NEAT_BOT_STATS = ['bot.isEvalDone', 'bot.popID', 'bot.gen', 'bot.scores', 'bot.lifetimes', 'bot.ranks', 'bot.fpss', 'bot.gamesleft'];
+function createLabeledStats(stats) {
+  return {
+    isEvalDone: stats[0],
+    popID: stats[1],
+    gen: stats[2],
+    scores: stats[3],
+    lifetimes: stats[4],
+    ranks: stats[5],
+    fpss: stats[6],
+    gamesleft: stats[7]
+  }
+}
 
 function initNeat () {
   return new Neat(
-    1, // inputs
-    1, // outputs
+    49, // inputs
+    3, // outputs
     null, // evaluation handled externally
     { // Options
-      mutation: [
-        Methods.Mutation.ADD_NODE,
-        Methods.Mutation.SUB_NODE,
-        Methods.Mutation.ADD_CONN,
-        Methods.Mutation.SUB_CONN,
-        Methods.Mutation.MOD_WEIGHT,
-        Methods.Mutation.MOD_BIAS,
-        Methods.Mutation.MOD_ACTIVATION,
-        Methods.Mutation.ADD_GATE,
-        Methods.Mutation.SUB_GATE,
-        Methods.Mutation.ADD_SELF_CONN,
-        Methods.Mutation.SUB_SELF_CONN,
-        Methods.Mutation.ADD_BACK_CONN,
-        Methods.Mutation.SUB_BACK_CONN
-      ],
+      mutation: Methods.mutation.ALL,
       popsize: POP_SIZE,
       mutationRate: MUTATION_RATE,
       elitism: ELITISM
@@ -239,30 +250,175 @@ function initNeat () {
 
 function runNeat() {
   if (neatControls.paused) {
-    setTimeout(runNeat, 100);
+    setTimeout(runNeat, 1000);
     return;
   }
 
   if (neatControls.stop) {
+
     neat = undefined;
     neatControls.stop = false;
     neatControls.paused = false;
     neatControls.running = false;
-    neatControls.genDone = false;
+
     return;
   }
 
   neatControls.running = true;
+  ipcResend = 0;
   if (neat === undefined) {
     neat = initNeat();
+    neat.state = {
+      genDone: false,
+      statsRecieved: true,
+      replies: [],
+      stats: [],
+      genomesEvaled: 0,
+      botsRunning: 0,
+      genomesRun: 0
+    }
+    // Make our own initial neural nets
+    if (false) {
+      neat.population = [];
+      for (var i = 0; i < neat.popsize; i++) {
+        var copy;
+        copy = new Architect.Random (neat.input, 10, neat.output);
+        copy.score = undefined;
+        neat.population.push(copy);
+      }
+    }
   }
 
-  if (neatControls.genDone) {
+  // Fitness scoring, elitism, crossover, and mutation
+  if (neat.state.genDone) {
+    var bestScore = 0;
+    var popSave = neat.export();
+    for (var p in neat.population) {
+      genome = neat.population[p];
+      genome.score = fitness(geneome);
+      bestScore = Math.max (bestScore, genome.score);
+      popSave[p].score = genome.score;
+      popSave[p].scores = genome.scores;
+      popSave[p].ranks = genome.ranks;
+      popSave[p].lifetimes = genome.lifetimes;
+      popSave[p].fpss = genome.fpss;
+    }
+    console.log("Generation " + neat.generation + " Best Score: " + bestScore);
 
+    fs.writeFile("pop" + neat.generation, JSON.stringify(popSave), function (err) {
+      if (err) {
+        console.log("Saving population failed!");
+        return;
+      }
+      console.log("Population saved.");
+    })
+
+    neat.sort();
+    var newPopulation = [];
+
+    // ELITISM
+    for (var i = 0; i < neat.elitism; i++) {
+      newPopulation.push(neat.population[i]);
+    }
+
+    // Breeding
+    for (var i = 0; i < neat.popsize - neat.elitism; i++) {
+      newPopulation.push(neat.getOffspring());
+    }
+
+    // Replace old population and mutate
+    neat.population = newPopulation;
+    neat.mutate();
+
+    // Reset
+    neat.generation++;
+    neat.state.replies = [];
+    neat.state.stats = [];
+    neat.state.statsRecieved = true;
+    neat.state.genomesEvaled = 0;
+    neat.state.genomesRun = 0;
+    neat.state.botsRunning = 0;
+    // Clear bots running (if any)
+    while (neatBots[0] !== undefined) {
+      if (neatBots[0]) { neatBots[0].close();}
+    }
+    neat.state.genDone = false;
+  }
+  // evaluation / simulation of slither.io bot
+  else if (neat.state.statsRecieved){
+    // Check on bots
+    var botsDone = [];
+    for (var s in neat.state.stats) {
+      var stat = createLabeledStats(neat.state.stats[s]);
+      if (stat.isEvalDone) {
+        botsDone.push(neatBots[s]);
+        neat.state.botsRunning--;
+        var genome = neat.population[stat.popID];
+        genome.scores = stat.scores;
+        genome.ranks = stat.ranks;
+        genome.lifetimes = stat.lifetimes;
+        genome.fpss = stat.fpss;
+        neat.state.genomesEvaled++;
+      }
+    }
+    botsDone.forEach(function (item) {
+      if (item) { item.close();}
+    });
+
+    // Evaluate a new genome if other finished until all genomes are evaled
+    while (neat.state.genomesRun < POP_SIZE && neat.state.botsRunning < PARALLEL_BOTS) {
+      createNEATBotWindow(BOT_PATH, HEADLESS, {
+        popid: neat.state.genomesRun,
+        gen: neat.generation,
+        gamesleft: GAMES_PER_BOT,
+        brain: neat.population[neat.state.genomesRun].toJSON()
+      });
+      neat.state.genomesRun++;
+      neat.state.botsRunning++;
+    }
+
+    // Is this generation's evaluations finished?
+    neat.state.genDone = neat.state.genomesEvaled == POP_SIZE;
+
+    if (!neat.state.genDone) {
+      // New stats request
+      neat.state.stats = new Array()
+      neat.state.replies = new Array()
+      neat.state.statsRevieved = false;
+      ipcResend = 0;
+
+      ipcMain.on('replyNeatStats', (event, arg) => {
+        if (neat.state.replies.every(reply => reply.index != arg.index)) {
+          neat.state.replies.push(arg)
+        }
+        if (neat.state.replies.length === neatBots.length) {
+          ipcMain.removeAllListeners(['replyNeatStats'])
+
+          neat.state.replies = neat.state.replies.sort(function (a, b) {
+            return a.index - b.index
+          })
+
+          neat.state.stats = neat.state.replies.map(function (object) {
+            return object.stats
+          })
+          neat.state.statsRecieved = true;
+        }
+      })
+
+      neatBots.forEach(function (item, index, array) {
+        item.webContents.send('getNeatStats', {'index': index, 'stats': NEAT_BOT_STATS})
+      })
+    }
   }
   else {
-    
+    if (ipcResend++ == 10) {
+      neatBots.forEach(function (item, index, array) {
+        if (false && neat.state.replies.every(reply => reply.index != index))
+          item.webContents.send('getNeatStats', {'index': index, 'stats': NEAT_BOT_STATS})
+      })
+      ipcResend = 0;
+    }
   }
-
-  setTimeout(runNeat, 250);
+  console.log("Gen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE);
+  setTimeout(runNeat, 1000);
 }
