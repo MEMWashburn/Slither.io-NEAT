@@ -209,7 +209,7 @@ var GENERATIONS      = 10;
 var MUTATION_RATE    = 0.3;
 var ELITISM          = Math.round(0.1 * POP_SIZE);
 
-function (genome) {
+function fitness(genome) {
   return Math.round(genome.scores.reduce(function(a,b) { return a + b;}) / genome.scores.length);
 }
 
