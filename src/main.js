@@ -13,6 +13,7 @@ const neataptic = require('neataptic');
 
 /** Rename vars */
 var Neat    = neataptic.Neat;
+var Network = neataptic.Network;
 var Methods = neataptic.methods;
 var Config  = neataptic.config;
 var Architect = neataptic.architect;
@@ -213,29 +214,43 @@ var GAMES_PER_BOT = 4;
 var HEADLESS = true;
 var SEC = 3; // Seconds between runNeat calls to keep asynchronous nature
 var IPC_RESEND = Math.round(15 / SEC);
+var RESET_GEN_TIMEOUT = 1800; // Seconds till timeout and restart the whole gen
 
 // GA SETTINGS //
 var POP_SIZE         = 50;
 //var GENERATIONS      = 10;
 var MUTATION_RATE    = 0.4; // 40%
 var ELITISM          = Math.round(0.1 * POP_SIZE); // 10%
+var CUSTOM_INIT_NET  = true; // Use network template
+
+var initNetwork = function() {
+  var net = new Network(49, 3); // create whatever network is good
+  for (var c in net.connections) {
+    // over write weights with magnitude > 1
+    if (Math.abs(net.connections[c].weight) >= 1) {
+      net.connections[c].weight = Math.random() * 2 - 1;
+    }
+  };
+  return net;
+};
 
 function fitness(genome) {
   return Math.round(genome.scores.reduce(function(a,b) { return a + b;}) / genome.scores.length);
-}
+};
 
 // INIT GLOBALS VARS //
 neatControls = {
   running: false,
   paused: false,
   stop: false,
-  continue: false,
-  gen: 17 // generation to start on
-}
+  continue: true,
+  gen: 5 // generation to start on
+};
 
 neat = undefined;
 ipcResend = 0;
 evaled = -1;
+resetGen = 0;
 NEAT_BOT_STATS = ['bot.isEvalDone', 'bot.popID', 'bot.gen', 'bot.scores', 'bot.lifetimes', 'bot.ranks', 'bot.fpss', 'bot.gamesleft'];
 
 // HELPER FUNCTIONS //
@@ -265,6 +280,25 @@ function initNeat () {
     }
   )
 };
+
+// Reset control variables
+function resetVars() {
+  evaled = -1;
+  neat.state.time = 0;
+  neat.state.replies = [];
+  neat.state.stats = [];
+  neat.state.statsRecieved = true;
+  neat.state.genomesEvaled = 0;
+  neat.state.genomesRun = 0;
+  neat.state.botsRunning = 0;
+  // Clear bots running (if any)
+  while (neatBots[0] !== undefined) {
+    if (neatBots[0]) { neatBots[0].close();}
+  }
+  // Clear stat Listener
+  ipcMain.removeAllListeners(['replyNeatStats'])
+  neat.state.genDone = false;
+}
 
   // New stats request
 function requestStats() {
@@ -329,11 +363,11 @@ function runNeat() {
     }
 
     // Make our own initial neural nets
-    if (true) {
+    if (CUSTOM_INIT_NET) {
       neat.population = [];
       for (var i = 0; i < neat.popsize; i++) {
         var copy;
-        copy = new Architect.Random (neat.input, 26, neat.output);
+        copy = initNetwork();
         copy.score = undefined;
         neat.population.push(copy);
       }
@@ -400,10 +434,10 @@ function runNeat() {
 
     fs.writeFile("pop" + neat.generation, JSON.stringify(popSave), function (err) {
       if (err) {
-        console.log("Saving population failed!");
+        console.log("ERR::\tSaving population failed!");
         return;
       }
-      console.log("Population saved.");
+      console.log("NEAT::\tPopulation saved.");
 
     })
     popSave = null;
@@ -430,22 +464,10 @@ function runNeat() {
     for (var i = 0; i < neat.elitism; i++) {
       neat.population[i] = newPopulation[i];
     }
+    neat.generation++;
 
     // Reset control variables
-    evaled = -1;
-    neat.generation++;
-    neat.state.time = 0;
-    neat.state.replies = [];
-    neat.state.stats = [];
-    neat.state.statsRecieved = true;
-    neat.state.genomesEvaled = 0;
-    neat.state.genomesRun = 0;
-    neat.state.botsRunning = 0;
-    // Clear bots running (if any)
-    while (neatBots[0] !== undefined) {
-      if (neatBots[0]) { neatBots[0].close();}
-    }
-    neat.state.genDone = false;
+      resetVars();
   }
 
   // evaluation / simulation of slither.io bots
@@ -505,9 +527,19 @@ function runNeat() {
 
   // Status reporting: report changes to num evaled and every minute
   if (evaled != neat.state.genomesEvaled || !(neat.state.time % 60)) {
+    if (evaled != neat.state.genomesEvaled) {
+      resetGen = 0;
+    }
     evaled = neat.state.genomesEvaled;
     console.log("NEAT::\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE + " (" + neat.state.time + "s)");
   }
+
+  resetGen += SEC;
   neat.state.time += SEC;
+
+  if (resetGen > RESET_GEN_TIMEOUT) {
+    console.log("NEAT::\t!! G E N E R A T I O N  R E S E T !!" + "\n\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE + " (" + neat.state.time + "s)");
+    resetVars();
+  }
   setTimeout(runNeat, 1000 * SEC);
 }
