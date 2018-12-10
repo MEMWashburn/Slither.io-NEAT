@@ -124,8 +124,8 @@ function createNEATBotWindow (codeUrl, headless, info) {
     botWindow.webContents.executeJavaScript(`window.botUrl = '${codeUrl}'`)
     botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
 
-    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 250);
-    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 2500);
+    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 500);
+    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 15000);
   });
 
   // Add the bot to the list with bots
@@ -206,13 +206,13 @@ ipcMain.on('submit-code', (event, args) => {
 // SETTINGS //
 var BOT_PATH = `file://${__dirname}/bot.neat.js`;
 var PARALLEL_BOTS = 10;
-var GAMES_PER_BOT = 2;
+var GAMES_PER_BOT = 4;
 var HEADLESS = true;
 
 // GA settings
-var POP_SIZE         = 20;
+var POP_SIZE         = 50;
 var GENERATIONS      = 10;
-var MUTATION_RATE    = 0.3;
+var MUTATION_RATE    = 0.4;
 var ELITISM          = Math.round(0.1 * POP_SIZE);
 
 function fitness(genome) {
@@ -224,11 +224,12 @@ neatControls = {
   paused: false,
   stop: false, 
   continue: true,
-  gen: 4
+  gen: 17
 }
 
 neat = undefined
 ipcResend = 0;
+evaled = -1;
 NEAT_BOT_STATS = ['bot.isEvalDone', 'bot.popID', 'bot.gen', 'bot.scores', 'bot.lifetimes', 'bot.ranks', 'bot.fpss', 'bot.gamesleft'];
 function createLabeledStats(stats) {
   return {
@@ -319,6 +320,17 @@ function runNeat() {
       genomesRun: 0,
       time: 0
     }
+    
+    // Make our own initial neural nets
+    if (true) {
+      neat.population = [];
+      for (var i = 0; i < neat.popsize; i++) {
+        var copy;
+        copy = new Architect.Random (neat.input, 26, neat.output);
+        copy.score = undefined;
+        neat.population.push(copy);
+      }
+    }
 
     if (neatControls.continue) {
       neatControls.paused = true;
@@ -333,38 +345,49 @@ function runNeat() {
       })
     }
 
-    // Make our own initial neural nets
-    if (false) {
-      neat.population = [];
-      for (var i = 0; i < neat.popsize; i++) {
-        var copy;
-        copy = new Architect.Random (neat.input, 10, neat.output);
-        copy.score = undefined;
-        neat.population.push(copy);
-      }
-    }
   }
 
   // Fitness scoring, elitism, crossover, and mutation
   if (neat.state.genDone) {
     var bestScore = 0;
+    var worstScore = Number.MAX_SAFE_INTEGER;
+    var sumScore = 0;
+    var avgGametime = 0;
     var popSave = {
       generation: neat.generation,
       elitism: neat.elitism,
       mutation: neat.mutationRate,
+      maxScore: 0,
+      minScore: 0,
+      averageScore: 0,
       pop: neat.export()
     }
     for (var p in neat.population) {
       genome = neat.population[p];
       genome.score = fitness(genome);
       bestScore = Math.max (bestScore, genome.score);
+      worstScore = Math.min (worstScore, genome.score);
+      sumScore += genome.score;
+      for (var i in genome.lifetimes) {
+        avgGametime += genome.lifetimes[i];
+      }
       popSave.pop[p].score = genome.score;
       popSave.pop[p].scores = genome.scores;
       popSave.pop[p].ranks = genome.ranks;
       popSave.pop[p].lifetimes = genome.lifetimes;
       popSave.pop[p].fpss = genome.fpss;
     }
-    console.log("NEAT::\tGen: " + neat.generation + "\tBest Score: " + bestScore+ " (" + neat.state.time + "s)");
+    popSave.maxScore = bestScore;
+    popSave.minScore = worstScore;
+    popSave.averageScore = sumScore / neat.popsize;
+    avgGametime /= neat.popsize * GAMES_PER_BOT;
+
+    console.log("NEAT::\tGen: " + neat.generation 
+      + "\tMax: " + bestScore 
+      + "\tAvg: " + popSave.averageScore 
+      + "\tMin: " + worstScore 
+      + "\tAvg Gametime: " + avgGametime
+      + " (" + neat.state.time + "s)");
 
     fs.writeFile("pop" + neat.generation, JSON.stringify(popSave), function (err) {
       if (err) {
@@ -397,6 +420,7 @@ function runNeat() {
     }
 
     // Reset
+    evaled = -1;
     neat.generation++;
     neat.state.time = 0;
     neat.state.replies = [];
@@ -459,8 +483,10 @@ function runNeat() {
       ipcResend = 0;
     }
   }
-
-  console.log("NEAT::\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE + " (" + neat.state.time + "s)");
+  if (evaled != neat.state.genomesEvaled || !(neat.state.time % 60)) {
+    evaled = neat.state.genomesEvaled;
+    console.log("NEAT::\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE + " (" + neat.state.time + "s)");
+  }  
   neat.state.time++;
   setTimeout(runNeat, 1000);
 }
