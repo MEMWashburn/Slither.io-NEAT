@@ -21,4 +21,6 @@ ipcRenderer.on('send-info', (events, args) => {
 	if (args.gen !== undefined) { bot.gen = args.gen};
 	if (args.gamesleft > 0) { bot.gamesleft = args.gamesleft};
 	if (args.brain) { bot.brain = neataptic.Network.fromJSON(args.brain)};
+
+	args.brain = null;
 });

@@ -124,8 +124,11 @@ function createNEATBotWindow (codeUrl, headless, info) {
     botWindow.webContents.executeJavaScript(`window.botUrl = '${codeUrl}'`)
     botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
 
-    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 500);
-    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 15000);
+    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 1000);
+    //setTimeout(function () {botWindow.webContents.send('send-info', info);}, 15000);
+    setTimeout(function () {info.brain = null; info = null;}, 1500);
+    botWindow.webContents.removeAllListeners(['did-fail-load']);
+
   });
 
   // Add the bot to the list with bots
@@ -208,29 +211,34 @@ var BOT_PATH = `file://${__dirname}/bot.neat.js`;
 var PARALLEL_BOTS = 10;
 var GAMES_PER_BOT = 4;
 var HEADLESS = true;
+var SEC = 3; // Seconds between runNeat calls to keep asynchronous nature
+var IPC_RESEND = Math.round(15 / SEC);
 
-// GA settings
+// GA SETTINGS //
 var POP_SIZE         = 50;
-var GENERATIONS      = 10;
-var MUTATION_RATE    = 0.4;
-var ELITISM          = Math.round(0.1 * POP_SIZE);
+//var GENERATIONS      = 10;
+var MUTATION_RATE    = 0.4; // 40%
+var ELITISM          = Math.round(0.1 * POP_SIZE); // 10%
 
 function fitness(genome) {
   return Math.round(genome.scores.reduce(function(a,b) { return a + b;}) / genome.scores.length);
 }
 
+// INIT GLOBALS VARS //
 neatControls = {
   running: false,
   paused: false,
-  stop: false, 
-  continue: true,
-  gen: 17
+  stop: false,
+  continue: false,
+  gen: 17 // generation to start on
 }
 
-neat = undefined
+neat = undefined;
 ipcResend = 0;
 evaled = -1;
 NEAT_BOT_STATS = ['bot.isEvalDone', 'bot.popID', 'bot.gen', 'bot.scores', 'bot.lifetimes', 'bot.ranks', 'bot.fpss', 'bot.gamesleft'];
+
+// HELPER FUNCTIONS //
 function createLabeledStats(stats) {
   return {
     isEvalDone: stats[0],
@@ -242,25 +250,24 @@ function createLabeledStats(stats) {
     fpss: stats[6],
     gamesleft: stats[7]
   }
-}
+};
 
 function initNeat () {
   return new Neat(
     49, // inputs
     3, // outputs
-    null, // evaluation handled externally
+    null, // evaluation handled externally, see fitness function above
     { // Options
-      mutation: Methods.mutation.ALL,
       popsize: POP_SIZE,
+      elitism: ELITISM,
       mutationRate: MUTATION_RATE,
-      elitism: ELITISM
+      mutation: Methods.mutation.ALL
     }
   )
 };
 
-function requestStats() {
-  //console.log("requestStats: requesting stats")
   // New stats request
+function requestStats() {
   neat.state.stats = new Array()
   neat.state.replies = new Array()
   neat.state.statsRecieved = false;
@@ -271,7 +278,6 @@ function requestStats() {
       neat.state.replies.push(arg)
     }
     if (neat.state.replies.length === neatBots.length) {
-      //console.log("requestStats: all bot stats recieved")
       ipcMain.removeAllListeners(['replyNeatStats'])
 
       neat.state.replies = neat.state.replies.sort(function (a, b) {
@@ -290,22 +296,23 @@ function requestStats() {
   })
 };
 
+// MAIN NEAT FUNCTION //
 function runNeat() {
+  // Check for pause
   if (neatControls.paused) {
     setTimeout(runNeat, 1000);
     return;
   }
-
+  // Check for stop
   if (neatControls.stop) {
-
     neat = undefined;
     neatControls.stop = false;
     neatControls.paused = false;
     neatControls.running = false;
-
     return;
   }
 
+  // RUN NEAT //
   neatControls.running = true;
 
   if (neat === undefined) {
@@ -320,7 +327,7 @@ function runNeat() {
       genomesRun: 0,
       time: 0
     }
-    
+
     // Make our own initial neural nets
     if (true) {
       neat.population = [];
@@ -332,6 +339,7 @@ function runNeat() {
       }
     }
 
+    // Continue from a specified generation from popN file
     if (neatControls.continue) {
       neatControls.paused = true;
       neat.generation = neatControls.gen;
@@ -339,12 +347,11 @@ function runNeat() {
         if (err) throw err;
 
         var d = JSON.parse(data);
-        neat.import(d.pop);        
+        neat.import(d.pop);
 
         neatControls.paused = false;
       })
     }
-
   }
 
   // Fitness scoring, elitism, crossover, and mutation
@@ -362,6 +369,7 @@ function runNeat() {
       averageScore: 0,
       pop: neat.export()
     }
+    // Calculate fitness score for every genome
     for (var p in neat.population) {
       genome = neat.population[p];
       genome.score = fitness(genome);
@@ -377,15 +385,16 @@ function runNeat() {
       popSave.pop[p].lifetimes = genome.lifetimes;
       popSave.pop[p].fpss = genome.fpss;
     }
+    // Save current generation
     popSave.maxScore = bestScore;
     popSave.minScore = worstScore;
     popSave.averageScore = sumScore / neat.popsize;
     avgGametime /= neat.popsize * GAMES_PER_BOT;
 
-    console.log("NEAT::\tGen: " + neat.generation 
-      + "\tMax: " + bestScore 
-      + "\tAvg: " + popSave.averageScore 
-      + "\tMin: " + worstScore 
+    console.log("NEAT::\tGen: " + neat.generation
+      + "\tMax: " + bestScore
+      + "\tAvg: " + popSave.averageScore
+      + "\tMin: " + worstScore
       + "\tAvg Gametime: " + avgGametime
       + " (" + neat.state.time + "s)");
 
@@ -395,12 +404,15 @@ function runNeat() {
         return;
       }
       console.log("Population saved.");
-    })
 
+    })
+    popSave = null;
+
+    // Generate new population
     neat.sort();
     var newPopulation = [];
 
-    // ELITISM
+    // Elitism
     for (var i = 0; i < neat.elitism; i++) {
       newPopulation.push(neat.population[i]);
     }
@@ -414,12 +426,12 @@ function runNeat() {
     neat.population = newPopulation;
     neat.mutate();
 
-    // Return elites to normal if mutated
+    // Will return elites to normal (if mutated)
     for (var i = 0; i < neat.elitism; i++) {
       neat.population[i] = newPopulation[i];
     }
 
-    // Reset
+    // Reset control variables
     evaled = -1;
     neat.generation++;
     neat.state.time = 0;
@@ -435,9 +447,9 @@ function runNeat() {
     }
     neat.state.genDone = false;
   }
-  // evaluation / simulation of slither.io bot
+
+  // evaluation / simulation of slither.io bots
   else if (neat.state.statsRecieved){
-    //console.log("stats got ");
     // Check on bots
     var botsDone = [];
     for (var s in neat.state.stats) {
@@ -452,19 +464,24 @@ function runNeat() {
         genome.fpss = stat.fpss;
         neat.state.genomesEvaled++;
       }
+      stat = null;
     }
+
+    // Remove bots that have completed their evaluation
     botsDone.forEach(function (item) {
       if (item) { item.close();}
     });
 
-    // Evaluate a new genome if other finished until all genomes are evaled
+    // Evaluate a new genome if others have finished until all genomes are evaled
     while (neat.state.genomesRun < POP_SIZE && neat.state.botsRunning < PARALLEL_BOTS) {
-      createNEATBotWindow(BOT_PATH, HEADLESS, {
+      var info = {
         popid: neat.state.genomesRun,
         gen: neat.generation,
         gamesleft: GAMES_PER_BOT,
         brain: neat.population[neat.state.genomesRun].toJSON()
-      });
+      };
+      createNEATBotWindow(BOT_PATH, HEADLESS, info);
+      info = null;
       neat.state.genomesRun++;
       neat.state.botsRunning++;
     }
@@ -472,21 +489,25 @@ function runNeat() {
     // Is this generation's evaluations finished?
     neat.state.genDone = neat.state.genomesEvaled == POP_SIZE;
 
+    // If not, poll evaluating bots
     if (!neat.state.genDone) {
       requestStats();
     }
   }
+  // Resend stats request if too long has passed
   else {
-    if (ipcResend++ == 10) {
+    if (ipcResend++ >= IPC_RESEND) {
       ipcMain.removeAllListeners(['replyNeatStats'])
       requestStats();
       ipcResend = 0;
     }
   }
+
+  // Status reporting: report changes to num evaled and every minute
   if (evaled != neat.state.genomesEvaled || !(neat.state.time % 60)) {
     evaled = neat.state.genomesEvaled;
     console.log("NEAT::\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE + " (" + neat.state.time + "s)");
-  }  
-  neat.state.time++;
-  setTimeout(runNeat, 1000);
+  }
+  neat.state.time += SEC;
+  setTimeout(runNeat, 1000 * SEC);
 }
