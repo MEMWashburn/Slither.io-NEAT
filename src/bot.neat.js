@@ -1492,7 +1492,7 @@ var userInterface = window.userInterface = (function() {
 
                     bot.fpss.push(Math.round(userInterface.framesPerSecond.fpss.reduce(function(a, b) { return a + b; }) / (userInterface.framesPerSecond.fpss.length)));
                     userInterface.framesPerSecond.fpss = [];
-                    
+
                     bot.lifetimes.push(bot.maxruntime);
                     window.botStart = 0;
 
@@ -1580,7 +1580,7 @@ var userInterface = window.userInterface = (function() {
 
 var waitForBrain = function () {
   if (bot.brain == undefined) {
-    setTimeout(waitForBrain, 200);1
+    setTimeout(waitForBrain, 200);
   }
   else { // Start games
     play_btn.btnf.click();
@@ -1588,12 +1588,7 @@ var waitForBrain = function () {
 };
 
 function getCurLen() {
-    var numElem = window.document.getElementsByClassName("nsi").length;
-    for (var d = 0; d < numElem; d++) {
-        if (window.document.getElementsByClassName("nsi")[d].innerText.includes("Your length")) {
-            return parseInt(window.document.getElementsByClassName("nsi")[d].firstChild.lastChild.innerText);
-        }
-    }
+    return Math.floor(15 * (window.fpsls[window.snake.sct] + window.snake.fam / window.fmlts[window.snake.sct] - 1) - 5) / 1;
 }
 
 // Main

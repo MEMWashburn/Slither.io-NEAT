@@ -214,7 +214,7 @@ var PARALLEL_BOTS = 20;
 var GAMES_PER_BOT = 5;
 var HEADLESS = true;
 var SEC = 3; // Seconds between runNeat calls to keep asynchronous nature
-var IPC_RESEND = Math.round(15 / SEC);
+var IPC_RESEND = Math.round(30 / SEC);
 var INITIAL_MAX_RUNTIME = 100; // Max seconds per game for slither bot
 var RESET_GEN_TIMEOUT = 1800; // Seconds till timeout and restart the whole gen
 
