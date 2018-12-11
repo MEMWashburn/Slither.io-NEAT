@@ -209,11 +209,13 @@ ipcMain.on('submit-code', (event, args) => {
 
 // SETTINGS //
 var BOT_PATH = `file://${__dirname}/bot.neat.js`;
-var PARALLEL_BOTS = 10;
-var GAMES_PER_BOT = 4;
+var NEW_BOTS_PER_CYCLE = 5; // bots that can be initiated in one runNeat call
+var PARALLEL_BOTS = 20;
+var GAMES_PER_BOT = 5;
 var HEADLESS = true;
 var SEC = 3; // Seconds between runNeat calls to keep asynchronous nature
 var IPC_RESEND = Math.round(15 / SEC);
+var INITIAL_MAX_RUNTIME = 100; // Max seconds per game for slither bot
 var RESET_GEN_TIMEOUT = 1800; // Seconds till timeout and restart the whole gen
 
 // GA SETTINGS //
@@ -243,15 +245,15 @@ neatControls = {
   running: false,
   paused: false,
   stop: false,
-  continue: true,
-  gen: 5 // generation to start on
+  continue: false,
+  gen: 0 // generation to start on
 };
 
 neat = undefined;
 ipcResend = 0;
 evaled = -1;
 resetGen = 0;
-NEAT_BOT_STATS = ['bot.isEvalDone', 'bot.popID', 'bot.gen', 'bot.scores', 'bot.lifetimes', 'bot.ranks', 'bot.fpss', 'bot.gamesleft'];
+NEAT_BOT_STATS = ['bot.isEvalDone', 'bot.popID', 'bot.gen', 'bot.scores', 'bot.lifetimes', 'bot.ranks', 'bot.fpss', 'bot.gamesleft'/*, 'bot.brain != undefined'*/];
 
 // HELPER FUNCTIONS //
 function createLabeledStats(stats) {
@@ -264,6 +266,7 @@ function createLabeledStats(stats) {
     ranks: stats[5],
     fpss: stats[6],
     gamesleft: stats[7]
+    //brainsent: stats[8]
   }
 };
 
@@ -306,12 +309,13 @@ function requestStats() {
   neat.state.replies = new Array()
   neat.state.statsRecieved = false;
   ipcResend = 0;
-
+  //console.log("NEAT:: \tStats Requested! (" + neat.state.time + ")");
   ipcMain.on('replyNeatStats', (event, arg) => {
     if (neat.state.replies.every(reply => reply.index != arg.index)) {
       neat.state.replies.push(arg)
     }
     if (neat.state.replies.length === neatBots.length) {
+      //console.log("NEAT:: \tStats Recieved!! (" + neat.state.time + ")");
       ipcMain.removeAllListeners(['replyNeatStats'])
 
       neat.state.replies = neat.state.replies.sort(function (a, b) {
@@ -359,6 +363,7 @@ function runNeat() {
       genomesEvaled: 0,
       botsRunning: 0,
       genomesRun: 0,
+      maxRunTime: INITIAL_MAX_RUNTIME,
       time: 0
     }
 
@@ -425,12 +430,13 @@ function runNeat() {
     popSave.averageScore = sumScore / neat.popsize;
     avgGametime /= neat.popsize * GAMES_PER_BOT;
 
-    console.log("NEAT::\tGen: " + neat.generation
-      + "\tMax: " + bestScore
-      + "\tAvg: " + popSave.averageScore
-      + "\tMin: " + worstScore
+    console.log("NEAT::    G E N E R A T I O N  C O M P L E T E    ::NEAT"
+      + "\n\tGen: " + neat.generation
       + "\tAvg Gametime: " + avgGametime
-      + " (" + neat.state.time + "s)");
+      + " (Runtime: " + neat.state.time + "s)"
+      + "\n\tScore:\tMax: " + bestScore
+      + "\tAvg: " + popSave.averageScore
+      + "\tMin: " + worstScore);
 
     fs.writeFile("pop" + neat.generation, JSON.stringify(popSave), function (err) {
       if (err) {
@@ -465,6 +471,8 @@ function runNeat() {
       neat.population[i] = newPopulation[i];
     }
     neat.generation++;
+    neat.state.maxRunTime += 1;
+    RESET_GEN_TIMEOUT = (GAMES_PER_BOT + 2) * neat.state.maxRunTime;
 
     // Reset control variables
       resetVars();
@@ -474,8 +482,10 @@ function runNeat() {
   else if (neat.state.statsRecieved){
     // Check on bots
     var botsDone = [];
+    //var brains = 0;
     for (var s in neat.state.stats) {
       var stat = createLabeledStats(neat.state.stats[s]);
+      //if (stat.brainsent) brains++;
       if (stat.isEvalDone) {
         botsDone.push(neatBots[s]);
         neat.state.botsRunning--;
@@ -488,6 +498,7 @@ function runNeat() {
       }
       stat = null;
     }
+    //console.log("NEAT:: \t\tBrains Found: " + brains + "/" + neatBots.length);
 
     // Remove bots that have completed their evaluation
     botsDone.forEach(function (item) {
@@ -495,11 +506,13 @@ function runNeat() {
     });
 
     // Evaluate a new genome if others have finished until all genomes are evaled
-    while (neat.state.genomesRun < POP_SIZE && neat.state.botsRunning < PARALLEL_BOTS) {
+    var quota = 0;
+    while (quota++ < NEW_BOTS_PER_CYCLE && neat.state.genomesRun < POP_SIZE && neat.state.botsRunning < PARALLEL_BOTS) {
       var info = {
         popid: neat.state.genomesRun,
         gen: neat.generation,
         gamesleft: GAMES_PER_BOT,
+        maxruntime: neat.state.maxRunTime,
         brain: neat.population[neat.state.genomesRun].toJSON()
       };
       createNEATBotWindow(BOT_PATH, HEADLESS, info);
@@ -538,7 +551,9 @@ function runNeat() {
   neat.state.time += SEC;
 
   if (resetGen > RESET_GEN_TIMEOUT) {
-    console.log("NEAT::\t!! G E N E R A T I O N  R E S E T !!" + "\n\tGen: " + neat.generation + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE + " (" + neat.state.time + "s)");
+    console.log("NEAT::\t!! G E N E R A T I O N  R E S E T !!" + "\n\tGen: " + neat.generation
+      + "\tPopulation Evaluated: " + neat.state.genomesEvaled + "/" + POP_SIZE + " (" + neat.state.time + "s)"
+      + "\nNEAT::\t!! G E N E R A T I O N  R E S E T !!");
     resetVars();
   }
   setTimeout(runNeat, 1000 * SEC);
