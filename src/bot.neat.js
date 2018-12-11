@@ -353,12 +353,14 @@ var bot = window.bot = (function() {
         isBotRunning: false,
         isEvalDone: false,
         isBotEnabled: true,
+        isBotTimeout: false,
         lookForFood: false,
         collisionPoints: [],
         collisionAngles: [],
         popID: -1,
         gen: -1,
         gamesleft: 1,
+        maxruntime: 100,
         brain: undefined,
         scores: [],
         ranks: [],
@@ -1470,10 +1472,10 @@ var userInterface = window.userInterface = (function() {
               // Modified slither.io redraw function
               new_redraw();
             }
-
             if (window.playing && bot.isBotEnabled && window.snake !== null) {
                 window.onmousemove = function() {};
                 bot.isBotRunning = true;
+                bot.isBotTimeout = false;
                 bot.neatgo();
                 if (window.rank) {
                   bot.rank = window.rank;
@@ -1481,7 +1483,33 @@ var userInterface = window.userInterface = (function() {
                 if (window.botStart == 0) {
                   window.botStart = start;
                 }
-            } else if (bot.isBotEnabled && bot.isBotRunning) {
+                else if ((start - window.botStart) > (bot.maxruntime * 1000)) {
+                    bot.gamesleft--;
+
+                    bot.scores.push(getCurLen());
+                    bot.ranks.push(bot.rank);
+                    bot.rank = 500;
+
+                    bot.fpss.push(Math.round(userInterface.framesPerSecond.fpss.reduce(function(a, b) { return a + b; }) / (userInterface.framesPerSecond.fpss.length)));
+                    userInterface.framesPerSecond.fpss = [];
+                    
+                    bot.lifetimes.push(bot.maxruntime);
+                    window.botStart = 0;
+
+                    if (bot.gamesleft) {
+                        bot.quickRespawn();
+                        bot.isBotTimeout = true;
+                        bot.isBotRunning = true;
+                    }
+                    else {
+                        window.playing = false;
+                        window.dead_mtm = 0;
+                        bot.isEvalDone = true;
+                        bot.isBotTimeout = true;
+                        bot.isBotRunning = false;
+                    }
+                }
+            } else if (bot.isBotEnabled && bot.isBotRunning && !bot.isBotTimeout) {
                 bot.isBotRunning = false;
                 bot.gamesleft--;
                 if (window.lastscore && window.lastscore.childNodes[1]) {
@@ -1507,7 +1535,7 @@ var userInterface = window.userInterface = (function() {
                 else {
                   bot.isEvalDone = true;
                 }
-            } else if (!bot.isEvalDone && bot.brain != undefined) {
+            } else if (!bot.isBotTimeout && !bot.isEvalDone && bot.brain != undefined) {
               play_btn.btnf.click();
             }
 
@@ -1558,6 +1586,15 @@ var waitForBrain = function () {
     play_btn.btnf.click();
   }
 };
+
+function getCurLen() {
+    var numElem = window.document.getElementsByClassName("nsi").length;
+    for (var d = 0; d < numElem; d++) {
+        if (window.document.getElementsByClassName("nsi")[d].innerText.includes("Your length")) {
+            return parseInt(window.document.getElementsByClassName("nsi")[d].firstChild.lastChild.innerText);
+        }
+    }
+}
 
 // Main
 (function() {
