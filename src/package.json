@@ -20,15 +20,17 @@
     "neat",
     "neuroevolution"
   ],
-  "contributors": ["Mitchell Miller", "Megan Washburn"],
+  "contributors": [
+    "Mitchell Miller",
+    "Megan Washburn"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/MEMWashburn/csc570-slither.io/issues"
   },
   "homepage": "https://github.com/MEMWashburn/csc570-slither.io.git#readme",
   "devDependencies": {
-    "electron": "^3.0.10",
-    "electron-prebuilt": "^1.0.1",
+    "electron": "^3.0.11",
     "neataptic": "^1.4.7"
   }
 }
