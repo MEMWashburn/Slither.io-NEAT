@@ -122,12 +122,27 @@ function createNEATBotWindow (codeUrl, headless, info) {
     // Insert 'passStats.js', to communicate for the stats
     insertScriptToWindow(botWindow, `file://${dirname}/neatComs.js`)
 
-    botWindow.webContents.executeJavaScript(`window.botUrl = '${codeUrl}'`)
-    botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
-
-    setTimeout(function () {botWindow.webContents.send('send-info', info);}, 1000);
-    //setTimeout(function () {botWindow.webContents.send('send-info', info);}, 15000);
-    setTimeout(function () {info.brain = null; info = null;}, 1500);
+    var checkBotReady = function () {
+      botWindow.webContents.executeJavaScript(`window.bot == undefined`).then((result) => {
+        if (result) {
+          setTimeout(checkBotReady, 1000)
+        }
+        else {
+          botWindow.webContents.executeJavaScript(`window.botUrl = '${codeUrl}'`)
+          botWindow.webContents.executeJavaScript(`window.headless = ` + headless)
+          botWindow.webContents.executeJavaScript(`bot.popID = ` + info.popid)
+          botWindow.webContents.executeJavaScript(`bot.gen = ` + info.gen)
+          botWindow.webContents.executeJavaScript(`bot.gamesleft = ` + info.gamesleft)
+          botWindow.webContents.executeJavaScript(`bot.maxruntime = ` + info.maxruntime)
+          botWindow.webContents.executeJavaScript(`(bot.brain = neataptic.Network.fromJSON(JSON.parse(\"` + JSON.stringify(info.brain).replace(/"/gi, '\\\"') + "\"))).activate != undefined")
+          info.brain = null;
+          info = null;
+          checkBotReady = null;
+        }
+      })
+    };
+    setTimeout(checkBotReady, 1000)
+    botWindow.webContents.removeAllListeners(['did-finish-load']);
     botWindow.webContents.removeAllListeners(['did-fail-load']);
 
   });
@@ -136,6 +151,10 @@ function createNEATBotWindow (codeUrl, headless, info) {
   neatBots.push(botWindow)
 
   botWindow.on('closed', function () {
+    if (info) {
+      info.brain = null;
+      info = null;
+    }
     // If the window is closed, remove it from the allBots array
     var index = neatBots.indexOf(botWindow)
     if (index > -1) {
@@ -208,19 +227,23 @@ ipcMain.on('submit-code', (event, args) => {
 ///////////////////////////////////////////////////////////////////////////////
 
 // SETTINGS //
-var BOT_PATH = `file://${__dirname}/bot.neat.js`;
-var NEW_BOTS_PER_CYCLE = 5; // bots that can be initiated in one runNeat call
-var PARALLEL_BOTS = 20;
-var GAMES_PER_BOT = 5;
-var HEADLESS = true;
-var SEC = 3; // Seconds between runNeat calls to keep asynchronous nature
-var IPC_RESEND = Math.round(30 / SEC);
-var INITIAL_MAX_RUNTIME = 100; // Max seconds per game for slither bot
-var RESET_GEN_TIMEOUT = 1800; // Seconds till timeout and restart the whole gen
+var BOT_PATH              = `file://${__dirname}/bot.neat.js`;
+var NEW_BOTS_PER_CYCLE    = 5; // bots that can be initiated in one runNeat call
+var PARALLEL_BOTS         = 10;
+var GAMES_PER_BOT         = 5;
+var HEADLESS              = true;
+var SEC                   = 3; // Seconds between runNeat calls to keep asynchronous nature
+var IPC_RESEND            = Math.round(30 / SEC);
+var INITIAL_MAX_RUNTIME   = 100; // Max seconds per game for slither bot
+var RESET_GEN_TIMEOUT     = 1000; // Seconds till timeout and restart the whole gen
+
+function NewMaxRunTime(gen) {
+  return INITIAL_MAX_RUNTIME + Math.round(gen / 50) * 60;
+}
 
 // GA SETTINGS //
 var POP_SIZE         = 50;
-//var GENERATIONS      = 10;
+//var GENERATIONS      = 10;// Unused
 var MUTATION_RATE    = 0.4; // 40%
 var ELITISM          = Math.round(0.1 * POP_SIZE); // 10%
 var CUSTOM_INIT_NET  = true; // Use network template
@@ -430,13 +453,13 @@ function runNeat() {
     popSave.averageScore = sumScore / neat.popsize;
     avgGametime /= neat.popsize * GAMES_PER_BOT;
 
-    console.log("NEAT::    G E N E R A T I O N  C O M P L E T E    ::NEAT"
+    console.log("NEAT::::  G E N E R A T I O N  C O M P L E T E  ::::::::"
       + "\n\tGen: " + neat.generation
       + "\tAvg Gametime: " + avgGametime
       + " (Runtime: " + neat.state.time + "s)"
       + "\n\tScore:\tMax: " + bestScore
       + "\tAvg: " + popSave.averageScore
-      + "\tMin: " + worstScore);
+      + "\tMin: " + worstScore + "\n");
 
     fs.writeFile("pop" + neat.generation, JSON.stringify(popSave), function (err) {
       if (err) {
@@ -471,7 +494,7 @@ function runNeat() {
       neat.population[i] = newPopulation[i];
     }
     neat.generation++;
-    neat.state.maxRunTime += 1;
+    neat.state.maxRunTime = NewMaxRunTime(neat.generation);
     RESET_GEN_TIMEOUT = (GAMES_PER_BOT + 2) * neat.state.maxRunTime;
 
     // Reset control variables
