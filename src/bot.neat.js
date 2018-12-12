@@ -1490,7 +1490,12 @@ var userInterface = window.userInterface = (function() {
                     bot.ranks.push(bot.rank);
                     bot.rank = 500;
 
-                    bot.fpss.push(Math.round(userInterface.framesPerSecond.fpss.reduce(function(a, b) { return a + b; }) / (userInterface.framesPerSecond.fpss.length)));
+                    if (userInterface.framesPerSecond.fpss.length > 1) {
+                      bot.fpss.push(Math.round(userInterface.framesPerSecond.fpss.reduce(function(a, b) { return a + b; }) / (userInterface.framesPerSecond.fpss.length)));
+                    }
+                    else {
+                      bot.fpss.push(0)
+                    }
                     userInterface.framesPerSecond.fpss = [];
 
                     bot.lifetimes.push(bot.maxruntime);
@@ -1523,7 +1528,12 @@ var userInterface = window.userInterface = (function() {
                 bot.ranks.push(bot.rank);
                 bot.rank = 500;
 
-                bot.fpss.push(Math.round(userInterface.framesPerSecond.fpss.reduce(function(a, b) { return a + b; }) / (userInterface.framesPerSecond.fpss.length)));
+                if (userInterface.framesPerSecond.fpss.length > 1) {
+                  bot.fpss.push(Math.round(userInterface.framesPerSecond.fpss.reduce(function(a, b) { return a + b; }) / (userInterface.framesPerSecond.fpss.length)));
+                }
+                else {
+                  bot.fpss.push(0)
+                }
                 userInterface.framesPerSecond.fpss = [];
 
                 bot.lifetimes.push(Math.floor((Date.now() - window.botStart)  / 1000));
