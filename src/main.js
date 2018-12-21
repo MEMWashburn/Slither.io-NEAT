@@ -15,6 +15,7 @@ const neataptic = require('neataptic');
 var Neat    = neataptic.Neat;
 var Network = neataptic.Network;
 var Methods = neataptic.methods;
+var Selection = Methods.selection;
 var Config  = neataptic.config;
 var Architect = neataptic.architect;
 
@@ -230,7 +231,7 @@ ipcMain.on('submit-code', (event, args) => {
 var BOT_PATH              = `file://${__dirname}/bot.neat.js`;
 var NEW_BOTS_PER_CYCLE    = 5; // bots that can be initiated in one runNeat call
 var PARALLEL_BOTS         = 10;
-var GAMES_PER_BOT         = 5;
+var GAMES_PER_BOT         = 10;
 var HEADLESS              = true;
 var SEC                   = 3; // Seconds between runNeat calls to keep asynchronous nature
 var IPC_RESEND            = Math.round(30 / SEC);
@@ -238,18 +239,22 @@ var INITIAL_MAX_RUNTIME   = 100; // Max seconds per game for slither bot
 var RESET_GEN_TIMEOUT     = 1000; // Seconds till timeout and restart the whole gen
 
 function NewMaxRunTime(gen) {
-  return INITIAL_MAX_RUNTIME + Math.round(gen / 50) * 60;
+  return INITIAL_MAX_RUNTIME + Math.floor(gen / 10) * 50;
 }
 
 // GA SETTINGS //
-var POP_SIZE         = 50;
-//var GENERATIONS      = 10;// Unused
+var POP_SIZE         = 100;
+var SELECTION        = Selection.TOURNAMENT;
+//SELECTION.power      = 4;
+SELECTION.size       = 0.1 * POP_SIZE; //10%
+SELECTION.probability= 1;
 var MUTATION_RATE    = 0.4; // 40%
 var ELITISM          = Math.round(0.1 * POP_SIZE); // 10%
 var CUSTOM_INIT_NET  = true; // Use network template
 
 var initNetwork = function() {
-  var net = new Network(49, 3); // create whatever network is good
+  //var net = new Network(49, 3); // create whatever network is good
+  var net = Architect.Random(49, 26, 3);
   for (var c in net.connections) {
     // over write weights with magnitude > 1
     if (Math.abs(net.connections[c].weight) >= 1) {
@@ -301,6 +306,7 @@ function initNeat () {
     { // Options
       popsize: POP_SIZE,
       elitism: ELITISM,
+      selection: SELECTION,
       mutationRate: MUTATION_RATE,
       mutation: Methods.mutation.ALL
     }
@@ -405,12 +411,22 @@ function runNeat() {
     if (neatControls.continue) {
       neatControls.paused = true;
       neat.generation = neatControls.gen;
+      neat.state.maxRunTime = NewMaxRunTime(neat.generation);
+      RESET_GEN_TIMEOUT = (GAMES_PER_BOT + 2) * neat.state.maxRunTime;
       fs.readFile("pop" + neatControls.gen, 'utf8', (err, data) => {
         if (err) throw err;
 
         var d = JSON.parse(data);
         neat.import(d.pop);
-
+        for (var p in d.pop) {
+          neat.population[p].score = d.pop[p].score;
+          neat.population[p].scores = d.pop[p].scores;
+          neat.population[p].lifetimes = d.pop[p].lifetimes;
+          neat.population[p].ranks = d.pop[p].ranks;
+          neat.population[p].fpss = d.pop[p].fpss;
+        }
+        neat.state.genDone = true;
+        neat.sort();
         neatControls.paused = false;
       })
     }
