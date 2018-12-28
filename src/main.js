@@ -254,7 +254,7 @@ var CUSTOM_INIT_NET  = true; // Use network template
 
 var initNetwork = function() {
   //var net = new Network(49, 3); // create whatever network is good
-  var net = Architect.Random(49, 26, 3);
+  var net = Architect.Random(49, 0, 3);
   for (var c in net.connections) {
     // over write weights with magnitude > 1
     if (Math.abs(net.connections[c].weight) >= 1) {
@@ -308,7 +308,14 @@ function initNeat () {
       elitism: ELITISM,
       selection: SELECTION,
       mutationRate: MUTATION_RATE,
-      mutation: Methods.mutation.ALL
+      mutation: [Methods.mutation.ADD_NODE,
+                Methods.mutation.ADD_CONN,
+                Methods.mutation.MOD_WEIGHT,
+                Methods.mutation.MOD_BIAS,
+                Methods.mutation.MOD_ACTIVATION,
+                Methods.mutation.ADD_GATE,
+                Methods.mutation.ADD_SELF_CONN,
+                Methods.mutation.ADD_BACK_CONN]
     }
   )
 };
