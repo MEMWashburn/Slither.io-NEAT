@@ -8,6 +8,8 @@ const fs = require('fs');
   var maxGen = parseInt(process.argv[3], 10);
   var csvStr = "generation,genome,run,score,lifetime,rank,fps,fitness,connections,input_nodes,hidden_nodes,output_nodes";
 
+  fs.writeFileSync("out.csv", csvStr);
+  csvStr = "";
   for (var gen = 0; gen <= maxGen; gen++) {
 
     var popSave = JSON.parse(fs.readFileSync(path + gen, 'utf8'));
@@ -28,7 +30,8 @@ const fs = require('fs');
           + "," + g.output;
       }
     }
+    fs.appendFileSync("out.csv", csvStr);
+    csvStr = "";
   };
-  fs.writeFileSync("out.csv", csvStr);
 
 })();
