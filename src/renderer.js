@@ -6,9 +6,9 @@ window.checkVariables = ['botUrl', 'bot.isBotRunning', 'bot.scores'];
 const {ipcRenderer} = require('electron');
 const {dialog} = require('electron').remote;
 
-var n = 4;
+var n = 1;
 document.getElementById('set-variable-num').value = "" + n;
-var headless = true;
+var headless = false;
 document.getElementById('headless').checked = headless;
 var path = '';
 

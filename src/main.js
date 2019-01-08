@@ -11,7 +11,7 @@ const fs = require('fs');
 /** Neataptic **/
 const neataptic = require('neataptic');
 
-/** Rename vars */
+/** Rename vars **/
 var Neat    = neataptic.Neat;
 var Network = neataptic.Network;
 var Methods = neataptic.methods;
@@ -169,7 +169,7 @@ function createNEATBotWindow (codeUrl, headless, info) {
 // Some APIs can only be used after this event occurs.
 app.on('ready', function () {
   createWindow();
-  runNeat();
+  // runNeat();
 })
 
 // Quit when all windows are closed.
