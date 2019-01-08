@@ -378,7 +378,8 @@ var bot = window.bot = (function() {
         fpss: [],
         lifetimes: [],
         rank: 500,
-        deathDir: [{a:0, x: 0, y: 0}],
+        deathDir: [],
+        prevInputs: [],
         deathCount: 5,
         frames: 0,
         prevScore: 0,
@@ -762,7 +763,7 @@ var bot = window.bot = (function() {
 
         reinfComputeFoodClusters: function() {
             window.foodClusters = [];
-            var foodGetIndex = []; 
+            var foodGetIndex = [];
             var fi = 0;
             var sw = bot.snakeWidth;
 
@@ -1030,19 +1031,21 @@ var bot = window.bot = (function() {
                 y: (Math.floor(out[2] * 2 * RES - RES))
               };
               canvasUtil.setMouseCoordinates(dir);
-              window.setAcceleration(Math.round(out[0]));
+              // window.setAcceleration(Math.round(out[0]));
 
               bot.frames++;
               if (bot.frames % 10 == 0) {
                 var outDir = { a: out[0], x: out[1], y: out[2] };
-                
+
                 bot.deathDir.unshift(outDir);
+                bot.prevInputs.unshift(input);
                 if (bot.deathDir.length > bot.deathCount) {
                     bot.deathDir.pop();
+                    bot.prevInputs.pop();
                 }
               }
-              window.deathDir = bot.deathDir;
-              
+              //window.deathDir = bot.deathDir;
+
               // Reward for raising score when food is collected
               if (getCurLen() > bot.prevScore) {
                 // bot.brain.propagate(0.3, 0, true, [1, 1, 1]);
@@ -1518,11 +1521,9 @@ var userInterface = window.userInterface = (function() {
                 if (window.botStart == 0) {
                   window.botStart = start;
                   // bot.brain.activate(input);
-                  for (var i = 0; i < bot.deathCount; i++) {
-                    if (typeof bot.deathDir[i] === 'undefined') {
-                      continue;
-                    }
+                  for (var i = 0; i < bot.deathCount.length; i++)  {
                     // console.log("Propagating: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
+                    bot.brain.activate(bot.prevInputs[i]);
                     bot.brain.propagate(0.3, 0, true, [bot.deathDir[i].a, -bot.deathDir[i].x, -bot.deathDir[i].y]);
                     // console.log("Propagated: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
                   }
