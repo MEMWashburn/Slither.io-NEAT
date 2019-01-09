@@ -25,6 +25,9 @@ var Selection = Methods.selection;
 var Config  = neataptic.config;
 var Architect = neataptic.architect;
 
+var FRAME_INTERVAL = 10;
+var SAVE_COUNT = 5;
+
 /*
 Override bot options here
 Uncomment variables you wish to change from their default values
@@ -379,8 +382,9 @@ var bot = window.bot = (function() {
         lifetimes: [],
         rank: 500,
         deathDir: [],
-        prevInputs: [],
-        deathCount: 5,
+        deathPrevInputs: [],
+        foodDir: [],
+        foodPrevInputs: [],
         frames: 0,
         prevScore: 0,
         foodTimeout: undefined,
@@ -1034,22 +1038,32 @@ var bot = window.bot = (function() {
               // window.setAcceleration(Math.round(out[0]));
 
               bot.frames++;
-              if (bot.frames % 10 == 0) {
-                var outDir = { a: out[0], x: out[1], y: out[2] };
+              if (bot.frames % FRAME_INTERVAL == 0) {
+                // var outDir = { a: out[0], x: out[1], y: out[2] };
 
-                bot.deathDir.unshift(outDir);
-                bot.prevInputs.unshift(input);
-                if (bot.deathDir.length > bot.deathCount) {
+                // Saving output / input for death punishment
+                bot.deathDir.unshift(out);
+                bot.deathPrevInputs.unshift(input);
+                if (bot.deathDir.length > SAVE_COUNT) {
                     bot.deathDir.pop();
-                    bot.prevInputs.pop();
+                    bot.deathPrevInputs.pop();
+                }
+
+                // Saving output / input for food reward
+                bot.foodDir.unshift(out);
+                bot.foodPrevInputs.unshift(input);
+                if (bot.foodDir.length > SAVE_COUNT) {
+                    bot.foodDir.pop();
+                    bot.foodPrevInputs.pop();
                 }
               }
-              //window.deathDir = bot.deathDir;
 
               // Reward for raising score when food is collected
               if (getCurLen() > bot.prevScore) {
-                // bot.brain.propagate(0.3, 0, true, [1, 1, 1]);
-                // console.log("bot.score > prevScore : " + getCurLen() + " " + bot.prevScore);
+                for (var i = 0; i < bot.foodDir.length; i++)  {
+                  bot.brain.activate(bot.foodPrevInputs[i]);
+                  bot.brain.propagate(0.3, 0, true, bot.foodDir[i]);
+                }
               }
               bot.prevScore = getCurLen();
             }
@@ -1520,12 +1534,11 @@ var userInterface = window.userInterface = (function() {
                 }
                 if (window.botStart == 0) {
                   window.botStart = start;
-                  // bot.brain.activate(input);
-                  for (var i = 0; i < bot.deathCount.length; i++)  {
-                    // console.log("Propagating: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
-                    bot.brain.activate(bot.prevInputs[i]);
-                    bot.brain.propagate(0.3, 0, true, [bot.deathDir[i].a, -bot.deathDir[i].x, -bot.deathDir[i].y]);
-                    // console.log("Propagated: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
+                  for (var i = 0; i < bot.deathDir.length; i++)  {
+                    // console.log("Propagating Death Penalty: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
+                    bot.brain.activate(bot.deathPrevInputs[i]);
+                    bot.brain.propagate(0.3, 0, true, [bot.deathDir[i][0], -bot.deathDir[i][1], -bot.deathDir[i][2]]); // accel, x, y
+                    // console.log("Propagated Death Penalty: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
                   }
                 }
                 else if ((start - window.botStart) > (bot.maxruntime * 1000)) {
@@ -1750,7 +1763,6 @@ function getCurLen() {
         }
     };
     bot.brain = net;
-    // console.log("LSTM net: " + net.nodes);
 
     // Start!
     userInterface.oefTimer();
