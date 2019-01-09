@@ -25,8 +25,11 @@ var Selection = Methods.selection;
 var Config  = neataptic.config;
 var Architect = neataptic.architect;
 
-var FRAME_INTERVAL = 10;
-var SAVE_COUNT = 5;
+var DEATH_FRAME_INT = 2;
+var DEATH_SAVE_COUNT = 8;
+var CLUST_SAVE_COUNT = 10;
+var DEATH_LEARNING_RATE = 0.4;
+var CLUST_LEARNING_RATE = 0.3;
 
 /*
 Override bot options here
@@ -1038,13 +1041,13 @@ var bot = window.bot = (function() {
               // window.setAcceleration(Math.round(out[0]));
 
               bot.frames++;
-              if (bot.frames % FRAME_INTERVAL == 0) {
+              if (bot.frames % DEATH_FRAME_INT == 0) {
                 // var outDir = { a: out[0], x: out[1], y: out[2] };
 
                 // Saving output / input for death punishment
                 bot.deathDir.unshift(out);
                 bot.deathPrevInputs.unshift(input);
-                if (bot.deathDir.length > SAVE_COUNT) {
+                if (bot.deathDir.length > DEATH_SAVE_COUNT) {
                     bot.deathDir.pop();
                     bot.deathPrevInputs.pop();
                 }
@@ -1052,20 +1055,37 @@ var bot = window.bot = (function() {
                 // Saving output / input for food reward
                 bot.foodDir.unshift(out);
                 bot.foodPrevInputs.unshift(input);
-                if (bot.foodDir.length > SAVE_COUNT) {
+                if (bot.foodPrevInputs.length > CLUST_SAVE_COUNT) {
                     bot.foodDir.pop();
                     bot.foodPrevInputs.pop();
                 }
               }
 
-              // Reward for raising score when food is collected
-              if (getCurLen() > bot.prevScore) {
-                for (var i = 0; i < bot.foodDir.length; i++)  {
+              // Reward for collecting optimal food cluster, punishment otherwise
+              if (bot.frames % 30 == 0) { // placeholder
+                for (var i = 0; i < bot.foodPrevInputs.length; i++)  {
                   bot.brain.activate(bot.foodPrevInputs[i]);
-                  bot.brain.propagate(0.3, 0, true, bot.foodDir[i]);
+                  // Finding highest score food cluster
+                  var highScore = -1;
+                  for (var s = (3 + 16); s < (3 + 16) + numOfBestFood; s += 3) {
+                    if (bot.foodPrevInputs[i][s] > highScore) { highscore = s; }
+                  }
+                  // Input for food clusters includes food location following high score
+                  var x = bot.foodPrevInputs[i][highScore + 1];
+                  var y = bot.foodPrevInputs[i][highScore + 2];
+                  var optFoodDir = [0, x, y];
+                  bot.brain.propagate(CLUST_LEARNING_RATE, 0, true, optFoodDir);
                 }
               }
-              bot.prevScore = getCurLen();
+
+            //   // Reward for raising score when food is collected
+            //   if (getCurLen() > bot.prevScore) {
+            //     for (var i = 0; i < bot.foodDir.length; i++)  {
+            //       bot.brain.activate(bot.foodPrevInputs[i]);
+            //       bot.brain.propagate(CLUST_LEARNING_RATE, 0, true, bot.foodDir[i]);
+            //     }
+            //   }
+            //   bot.prevScore = getCurLen();
             }
         },
 
@@ -1537,7 +1557,7 @@ var userInterface = window.userInterface = (function() {
                   for (var i = 0; i < bot.deathDir.length; i++)  {
                     // console.log("Propagating Death Penalty: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
                     bot.brain.activate(bot.deathPrevInputs[i]);
-                    bot.brain.propagate(0.3, 0, true, [bot.deathDir[i][0], -bot.deathDir[i][1], -bot.deathDir[i][2]]); // accel, x, y
+                    bot.brain.propagate(DEATH_LEARNING_RATE, 0, true, [bot.deathDir[i][0], -bot.deathDir[i][1], -bot.deathDir[i][2]]); // accel, x, y
                     // console.log("Propagated Death Penalty: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
                   }
                 }
