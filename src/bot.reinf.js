@@ -27,9 +27,9 @@ var Architect = neataptic.architect;
 
 var DEATH_FRAME_INT = 2;
 var DEATH_SAVE_COUNT = 8;
-var CLUST_SAVE_COUNT = 10;
+var CLUST_SAVE_COUNT = 4;
 var DEATH_LEARNING_RATE = 0.4;
-var CLUST_LEARNING_RATE = 0.3;
+var CLUST_LEARNING_RATE = 0.2;
 
 /*
 Override bot options here
@@ -1062,18 +1062,20 @@ var bot = window.bot = (function() {
               }
 
               // Reward for collecting optimal food cluster, punishment otherwise
-              if (bot.frames % 30 == 0) { // placeholder
+              if (bot.frames % 3 * DEATH_FRAME_INT * CLUST_SAVE_COUNT == 0) { // placeholder
                 for (var i = 0; i < bot.foodPrevInputs.length; i++)  {
                   bot.brain.activate(bot.foodPrevInputs[i]);
                   // Finding highest score food cluster
-                  var highScore = -1;
-                  for (var s = (3 + 16); s < (3 + 16) + numOfBestFood; s += 3) {
-                    if (bot.foodPrevInputs[i][s] > highScore) { highscore = s; }
-                  }
+                  var highScore = 19;
                   // Input for food clusters includes food location following high score
                   var x = bot.foodPrevInputs[i][highScore + 1];
                   var y = bot.foodPrevInputs[i][highScore + 2];
-                  var optFoodDir = [0, x, y];
+                  x -= bot.foodPrevInputs[i][0];
+                  y -= bot.foodPrevInputs[i][1];
+
+                  var mag = Math.sqrt(x*x + y*y);
+
+                  var optFoodDir = [0, x/mag, y/mag];
                   bot.brain.propagate(CLUST_LEARNING_RATE, 0, true, optFoodDir);
                 }
               }
