@@ -25,11 +25,11 @@ var Selection = Methods.selection;
 var Config  = neataptic.config;
 var Architect = neataptic.architect;
 
-var DEATH_FRAME_INT = 2;
+var DEATH_FRAME_INT = 1;
 var DEATH_SAVE_COUNT = 8;
-var CLUST_SAVE_COUNT = 4;
-var DEATH_LEARNING_RATE = 0.4;
-var CLUST_LEARNING_RATE = 0.2;
+var CLUST_SAVE_COUNT = 5;
+var DEATH_LEARNING_RATE = 0.5;
+var CLUST_LEARNING_RATE = 0.3;
 
 /*
 Override bot options here
@@ -1777,13 +1777,7 @@ function getCurLen() {
         inputToDeep: true         // default is true
     };
 
-    var net = Architect.LSTM(49, 0, 3, options);
-    for (var c in net.connections) {
-        // over write weights with magnitude > 1
-        if (Math.abs(net.connections[c].weight) >= 1) {
-        net.connections[c].weight = Math.random() * 2 - 1;
-        }
-    };
+    var net = Architect.LSTM(49, 20, 20, 20, 3, options);
     bot.brain = net;
 
     // Start!
