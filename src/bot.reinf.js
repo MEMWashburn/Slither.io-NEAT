@@ -1582,15 +1582,16 @@ var userInterface = window.userInterface = (function() {
                   window.botStart = start;
 
                   // Logging reinf info (brain, etc.)
-                //   var reinfSave = bot.brain;
-                  fsys.writeFile("../reinf" + bot.scores.length, JSON.stringify(bot.brain), function (err) {
+                  // var reinfSave = bot.brain;
+                  // "../reinfInfo" + bot.scores.length; // to save per game rather than overwrite
+                  fsys.writeFile("../reinfInfo", JSON.stringify(bot.brain), function (err) {
                     if (err) {
                       console.log("ERR::\tSaving reinforcement info failed!");
                       return;
                     }
-                    console.log("NEAT::\tReinforcement info saved.");
+                    console.log("REINF::\tReinforcement info saved.");
                   })
-                //   reinfSave = null;
+                  // reinfSave = null;
                   
                 //   // Recording output / input at best score
                 //   if (bot.prevScore < getCurLen()) {
