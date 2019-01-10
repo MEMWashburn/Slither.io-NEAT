@@ -14,6 +14,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 // @grant        none
 // ==/UserScript==
 
+
+/** File System **/
+const fsys = require('fs');
+
 /** Neataptic **/
 const neataptic = require('neataptic');
 
@@ -25,11 +29,13 @@ var Selection = Methods.selection;
 var Config  = neataptic.config;
 var Architect = neataptic.architect;
 
-var DEATH_FRAME_INT = 1;
+var FRAME_INT = 1;
 var DEATH_SAVE_COUNT = 8;
 var CLUST_SAVE_COUNT = 5;
 var DEATH_LEARNING_RATE = 0.5;
 var CLUST_LEARNING_RATE = 0.3;
+var TRAIN_GAMES_INT = 3; // Train on best input / output pair every x games
+var TRAIN_SAVE_COUNT = 10;
 
 /*
 Override bot options here
@@ -389,6 +395,7 @@ var bot = window.bot = (function() {
         foodDir: [],
         foodPrevInputs: [],
         frames: 0,
+        bestTrainSet: [],
         prevScore: 0,
         foodTimeout: undefined,
         sectorBoxSide: 0,
@@ -1041,9 +1048,7 @@ var bot = window.bot = (function() {
               // window.setAcceleration(Math.round(out[0]));
 
               bot.frames++;
-              if (bot.frames % DEATH_FRAME_INT == 0) {
-                // var outDir = { a: out[0], x: out[1], y: out[2] };
-
+              if (bot.frames % FRAME_INT == 0) {
                 // Saving output / input for death punishment
                 bot.deathDir.unshift(out);
                 bot.deathPrevInputs.unshift(input);
@@ -1061,8 +1066,27 @@ var bot = window.bot = (function() {
                 }
               }
 
+            //   // Extra training past backpropagation on death / food clusters
+            //   if (bot.scores.length % TRAIN_GAMES_INT == 0) {
+            //     var options = {
+            //         log: 1, // reporting every n iterations
+            //         error: 0.03,
+            //         cost: methods.cost.MSE,
+            //         rate: 0.3,
+            //         dropout: 0,
+            //         shuffle: false,
+            //         iterations: 100, // NaN
+            //         schedule : { function: function(data){console.log(Date.now, data.error)}, iterations: 5},
+            //         clear: false, // true for LSTM time series
+            //         momentum: 0,
+            //         ratePolicy: methods.rate.FIXED(),
+            //         batchSize: 1
+            //       };
+            //     bot.brain.train(bot.bestTrainSet, options);
+            //   }
+
               // Reward for collecting optimal food cluster, punishment otherwise
-              if (bot.frames % 3 * DEATH_FRAME_INT * CLUST_SAVE_COUNT == 0) { // placeholder
+              if (bot.frames % 3 * FRAME_INT * CLUST_SAVE_COUNT == 0) { // placeholder
                 for (var i = 0; i < bot.foodPrevInputs.length; i++)  {
                   bot.brain.activate(bot.foodPrevInputs[i]);
                   // Finding highest score food cluster
@@ -1556,11 +1580,31 @@ var userInterface = window.userInterface = (function() {
                 }
                 if (window.botStart == 0) {
                   window.botStart = start;
+
+                  // Logging reinf info (brain, etc.)
+                //   var reinfSave = bot.brain;
+                  fsys.writeFile("../reinf" + bot.scores.length, JSON.stringify(bot.brain), function (err) {
+                    if (err) {
+                      console.log("ERR::\tSaving reinforcement info failed!");
+                      return;
+                    }
+                    console.log("NEAT::\tReinforcement info saved.");
+                  })
+                //   reinfSave = null;
+                  
+                //   // Recording output / input at best score
+                //   if (bot.prevScore < getCurLen()) {
+                //     bot.prevScore = getCurLen();
+                //     bot.bestTrainSet.unshift([bot.input, bot.myOutput]);
+                //     if (bot.bestTrainSet.length < TRAIN_SAVE_COUNT) {
+                //       bot.bestTrainSet.pop();
+                //     }
+                //   }
+
+                  // Negative reinforcement for dying, go exact opposite direciton
                   for (var i = 0; i < bot.deathDir.length; i++)  {
-                    // console.log("Propagating Death Penalty: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
                     bot.brain.activate(bot.deathPrevInputs[i]);
                     bot.brain.propagate(DEATH_LEARNING_RATE, 0, true, [bot.deathDir[i][0], -bot.deathDir[i][1], -bot.deathDir[i][2]]); // accel, x, y
-                    // console.log("Propagated Death Penalty: " + bot.brain.connections[0].weight + ", " + bot.brain.connections[99].weight);
                   }
                 }
                 else if ((start - window.botStart) > (bot.maxruntime * 1000)) {
