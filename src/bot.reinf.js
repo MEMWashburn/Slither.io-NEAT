@@ -32,10 +32,11 @@ var Architect = neataptic.architect;
 var FRAME_INT = 1;
 var DEATH_SAVE_COUNT = 8;
 var CLUST_SAVE_COUNT = 5;
-var DEATH_LEARNING_RATE = 0.5;
-var CLUST_LEARNING_RATE = 0.3;
+var DEATH_LEARNING_RATE = 0.3;
+var CLUST_LEARNING_RATE = 0.4;
 var TRAIN_GAMES_INT = 3; // Train on best input / output pair every x games
 var TRAIN_SAVE_COUNT = 10;
+var trainRound = 0;
 
 /*
 Override bot options here
@@ -1066,24 +1067,28 @@ var bot = window.bot = (function() {
                 }
               }
 
-            //   // Extra training past backpropagation on death / food clusters
-            //   if (bot.scores.length % TRAIN_GAMES_INT == 0) {
-            //     var options = {
-            //         log: 1, // reporting every n iterations
-            //         error: 0.03,
-            //         cost: methods.cost.MSE,
-            //         rate: 0.3,
-            //         dropout: 0,
-            //         shuffle: false,
-            //         iterations: 100, // NaN
-            //         schedule : { function: function(data){console.log(Date.now, data.error)}, iterations: 5},
-            //         clear: false, // true for LSTM time series
-            //         momentum: 0,
-            //         ratePolicy: methods.rate.FIXED(),
-            //         batchSize: 1
-            //       };
-            //     bot.brain.train(bot.bestTrainSet, options);
-            //   }
+              // Extra training past backpropagation on death / food clusters
+              if (bot.scores.length % TRAIN_GAMES_INT == 0) {
+                var options = {
+                    log: 1, // reporting every n iterations
+                    error: 0.03,
+                    cost: Methods.cost.MSE,
+                    rate: 0.3,
+                    dropout: 0,
+                    shuffle: false,
+                    iterations: 100, // NaN
+                    schedule : { function: function(data){console.log(Date.now, data.error)}, iterations: 5},
+                    clear: false, // true for LSTM time series
+                    momentum: 0,
+                    ratePolicy: Methods.rate.FIXED(),
+                    batchSize: 1
+                };
+                if (typeof(bot.bestTrainSet[0]) !== 'undefined') {
+                    console.log("REINF::\tTraining Round: " + trainRound);
+                    // bot.brain.train(bot.bestTrainSet, options);
+                    trainRound++;
+                }
+              }
 
               // Reward for collecting optimal food cluster, punishment otherwise
               if (bot.frames % 3 * FRAME_INT * CLUST_SAVE_COUNT == 0) { // placeholder
@@ -1582,9 +1587,23 @@ var userInterface = window.userInterface = (function() {
                   window.botStart = start;
 
                   // Logging reinf info (brain, etc.)
+                //   var iter = 0;
+                //   fsys.readFile('../iter.txt', 'utf-8', (err, data) => { 
+                //     if (err) {
+                //         fsys.writeFile('../iter.txt', 0, function (err) { 
+                //             if (err) throw err;
+                //         })
+                //     }
+                //     iter = parseInt(data, 10) + 1;
+                //   })
+                //   fsys.writeFile('../iter.txt', iter, function (err) { 
+                //     if (err) throw err;
+                //   })
                   // var reinfSave = bot.brain;
-                  // "../reinfInfo" + bot.scores.length; // to save per game rather than overwrite
-                  fsys.writeFile("../reinfInfo", JSON.stringify(bot.brain), function (err) {
+                  // "../reinfInfo" + bot.scores.length;    // to save per game rather than overwrite
+                  // "../reinfInfo" + iter;                 // configure to save per run rather than overwrite
+                  var lastScore = bot.scores[bot.scores.length - 1];
+                  fsys.writeFile("../reinfInfo" + bot.scores.length + "_" + lastScore, JSON.stringify(bot.brain), function (err) {
                     if (err) {
                       console.log("ERR::\tSaving reinforcement info failed!");
                       return;
@@ -1593,14 +1612,15 @@ var userInterface = window.userInterface = (function() {
                   })
                   // reinfSave = null;
                   
-                //   // Recording output / input at best score
-                //   if (bot.prevScore < getCurLen()) {
-                //     bot.prevScore = getCurLen();
-                //     bot.bestTrainSet.unshift([bot.input, bot.myOutput]);
-                //     if (bot.bestTrainSet.length < TRAIN_SAVE_COUNT) {
-                //       bot.bestTrainSet.pop();
-                //     }
-                //   }
+                  // Recording output / input at best score
+                  if (bot.prevScore < lastScore) {
+                    bot.prevScore = lastScore;
+                    var set = { input: window.myInputs, output: window.myOutput };
+                    bot.bestTrainSet.unshift(set);
+                    if (bot.bestTrainSet.length > TRAIN_SAVE_COUNT) {
+                      bot.bestTrainSet.pop();
+                    }
+                  }
 
                   // Negative reinforcement for dying, go exact opposite direciton
                   for (var i = 0; i < bot.deathDir.length; i++)  {
@@ -1816,7 +1836,7 @@ function getCurLen() {
     // Network options for LSTM
     var options = {
         memoryToMemory: false,    // default is false
-        outputToMemory: false,    // default is false
+        outputToMemory: true,    // default is false
         outputToGates: false,     // default is false
         inputToOutput: true,      // default is true
         inputToDeep: true         // default is true
