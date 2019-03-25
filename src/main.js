@@ -229,26 +229,26 @@ ipcMain.on('submit-code', (event, args) => {
 
 // SETTINGS //
 var BOT_PATH              = `file://${__dirname}/bot.neat.js`;
-var NEW_BOTS_PER_CYCLE    = 5; // bots that can be initiated in one runNeat call
-var PARALLEL_BOTS         = 10;
+var NEW_BOTS_PER_CYCLE    = 10; // bots that can be initiated in one runNeat call
+var PARALLEL_BOTS         = 20;
 var GAMES_PER_BOT         = 10;
 var HEADLESS              = true;
-var SEC                   = 3; // Seconds between runNeat calls to keep asynchronous nature
+var SEC                   = 5; // Seconds between runNeat calls to keep asynchronous nature
 var IPC_RESEND            = Math.round(30 / SEC);
-var INITIAL_MAX_RUNTIME   = 100; // Max seconds per game for slither bot
+var INITIAL_MAX_RUNTIME   = 50; // Max seconds per game for slither bot
 var RESET_GEN_TIMEOUT     = 1000; // Seconds till timeout and restart the whole gen
 
 function NewMaxRunTime(gen) {
-  return INITIAL_MAX_RUNTIME + Math.floor(gen / 10) * 50;
+  return INITIAL_MAX_RUNTIME + Math.floor(gen / 20) * 50;
 }
 
 // GA SETTINGS //
-var POP_SIZE         = 100;
+var POP_SIZE         = 40;
 var SELECTION        = Selection.TOURNAMENT;
 //SELECTION.power      = 4;
 SELECTION.size       = 0.1 * POP_SIZE; //10%
 SELECTION.probability= 1;
-var MUTATION_RATE    = 0.4; // 40%
+var MUTATION_RATE    = 0.5; // 50%
 var ELITISM          = Math.round(0.1 * POP_SIZE); // 10%
 var CUSTOM_INIT_NET  = true; // Use network template
 
@@ -265,7 +265,11 @@ var initNetwork = function() {
 };
 
 function fitness(genome) {
-  return Math.round(genome.scores.reduce(function(a,b) { return a + b;}) / genome.scores.length);
+  fitScore = 0;
+  for (var i = 0; i < genome.scores.length; i++) {
+    fitScore += genome.scores[i] / genome.lifetimes[i];
+  }
+  return Math.round(fitScore / genome.scores.length);
 };
 
 // INIT GLOBALS VARS //
