@@ -169,7 +169,7 @@ function createNEATBotWindow (codeUrl, headless, info) {
 // Some APIs can only be used after this event occurs.
 app.on('ready', function () {
   createWindow();
-  // runNeat();
+  runNeat();
 })
 
 // Quit when all windows are closed.
@@ -229,13 +229,13 @@ ipcMain.on('submit-code', (event, args) => {
 
 // SETTINGS //
 var BOT_PATH              = `file://${__dirname}/bot.neat.js`;
-var NEW_BOTS_PER_CYCLE    = 10; // bots that can be initiated in one runNeat call
-var PARALLEL_BOTS         = 20;
-var GAMES_PER_BOT         = 10;
+var NEW_BOTS_PER_CYCLE    = 20; // bots that can be initiated in one runNeat call
+var PARALLEL_BOTS         = 40;
+var GAMES_PER_BOT         = 3;
 var HEADLESS              = true;
 var SEC                   = 5; // Seconds between runNeat calls to keep asynchronous nature
 var IPC_RESEND            = Math.round(30 / SEC);
-var INITIAL_MAX_RUNTIME   = 50; // Max seconds per game for slither bot
+var INITIAL_MAX_RUNTIME   = 6000; // Max seconds per game for slither bot
 var RESET_GEN_TIMEOUT     = 1000; // Seconds till timeout and restart the whole gen
 
 function NewMaxRunTime(gen) {
@@ -246,7 +246,7 @@ function NewMaxRunTime(gen) {
 var POP_SIZE         = 40;
 var SELECTION        = Selection.TOURNAMENT;
 //SELECTION.power      = 4;
-SELECTION.size       = 0.1 * POP_SIZE; //10%
+SELECTION.size       = 0.2 * POP_SIZE; //10%
 SELECTION.probability= 1;
 var MUTATION_RATE    = 0.5; // 50%
 var ELITISM          = Math.round(0.1 * POP_SIZE); // 10%
@@ -277,8 +277,8 @@ neatControls = {
   running: false,
   paused: false,
   stop: false,
-  continue: false,
-  gen: 0 // generation to start on
+  continue: true,
+  gen: 518 // generation to start on
 };
 
 neat = undefined;
@@ -429,15 +429,13 @@ function runNeat() {
 
         var d = JSON.parse(data);
         neat.import(d.pop);
-        for (var p in d.pop) {
-          neat.population[p].score = d.pop[p].score;
-          neat.population[p].scores = d.pop[p].scores;
-          neat.population[p].lifetimes = d.pop[p].lifetimes;
-          neat.population[p].ranks = d.pop[p].ranks;
-          neat.population[p].fpss = d.pop[p].fpss;
+        g = neat.population[28];
+        g.score = undefined;
+        for (var p in POP_SIZE) {
+          neat.population[p] = g;
         }
-        neat.state.genDone = true;
-        neat.sort();
+        //neat.state.genDone = true;
+        //neat.sort();
         neatControls.paused = false;
       })
     }
